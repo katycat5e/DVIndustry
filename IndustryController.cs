@@ -12,6 +12,8 @@ namespace DVIndustry
         public ResourceClass AcceptedItems;
         public float Amount;
 
+        public string Key => AcceptedItems?.ID;
+
         public IndustryResource( ResourceClass accepted, float amount )
         {
             AcceptedItems = accepted;
@@ -29,39 +31,41 @@ namespace DVIndustry
         public IndustryResource[] Inputs;
         public IndustryResource[] Outputs;
 
-        public bool IsWorking;
         public float StartTime;
 
+        public bool IsWorking { get; set; }
         public bool IsFinished => (Time.time - StartTime) >= ProcessingTime;
     }
 
-    public abstract class IndustryBase : MonoBehaviour
+    public class IndustryController : MonoBehaviour
     {
-        protected readonly Dictionary<string, IndustryResource> inputStockpile;
+        protected readonly Dictionary<string, IndustryResource> stockpileMap;
+        protected readonly List<IndustryResource> inputStockpile;
         protected readonly List<IndustryResource> outputStockpile;
         protected readonly List<IndustryProcess> processes;
 
         public bool IsResourceAvailable( string resourceId, float amount )
         {
-            if( inputStockpile.TryGetValue(resourceId, out IndustryResource stock) )
+            if( stockpileMap.TryGetValue(resourceId, out IndustryResource stock) )
             {
-                return stock.Amount > amount;
+                return stock.Amount >= amount;
             }
             return false;
         }
+
         protected bool AreIngredientsAvailable( IndustryProcess process )
         {
             foreach( var ingred in process.Inputs )
             {
-                if( !IsResourceAvailable(ingred.AcceptedItems.ID, ingred.Amount) ) return false;
+                if( !IsResourceAvailable(ingred.Key, ingred.Amount) ) return false;
             }
 
             return true;
         }
 
-        public void AddInputResource( CargoType cargoType, float amount )
+        public void StoreInputCargo( CargoType cargoType, float amount )
         {
-            foreach( IndustryResource stock in inputStockpile.Values )
+            foreach( IndustryResource stock in inputStockpile )
             {
                 if( stock.AcceptedItems.ContainsCargo(cargoType) )
                 {
@@ -73,21 +77,18 @@ namespace DVIndustry
             DVIndustry.ModEntry.Logger.Warning($"Tried to store an input ({cargoType}) that this industry doesn't accept");
         }
 
-        protected void AddProcessProduct( IndustryResource product )
+        protected void StoreResource( IndustryResource resource )
         {
-            foreach( var stock in outputStockpile )
+            if( stockpileMap.TryGetValue(resource.Key, out IndustryResource stock) )
             {
-                if( stock.AcceptedItems == product.AcceptedItems )
-                {
-                    stock.Amount += product.Amount;
-                    return;
-                }
+                stock.Amount += resource.Amount;
+                return;
             }
 
-            DVIndustry.ModEntry.Logger.Warning($"Tried to store an output ({product.AcceptedItems.ID}) that this industry doesn't produce");
+            DVIndustry.ModEntry.Logger.Warning($"Tried to store an output ({resource.AcceptedItems.ID}) that this industry doesn't produce");
         }
 
-        public void Start()
+        public void OnEnable()
         {
             foreach( var process in processes )
             {
@@ -104,7 +105,7 @@ namespace DVIndustry
                     // process completed, yeet products
                     foreach( IndustryResource output in process.Outputs )
                     {
-                        AddProcessProduct(output);
+                        StoreResource(output);
                     }
 
                     process.IsWorking = false;
@@ -117,6 +118,21 @@ namespace DVIndustry
                     {
                         process.IsWorking = true;
                         process.StartTime = Time.time;
+                    }
+                }
+            }
+        }
+
+        public void OnDisable()
+        {
+            foreach( var process in processes )
+            {
+                if( process.IsWorking )
+                {
+                    process.IsWorking = false;
+                    foreach( var ingred in process.Inputs )
+                    {
+                        StoreResource(ingred);
                     }
                 }
             }

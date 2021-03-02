@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
+using HarmonyLib;
 using UnityModManagerNet;
 
 namespace DVIndustry
@@ -13,7 +15,8 @@ namespace DVIndustry
         {
             ModEntry = modEntry;
 
-            
+            var harmony = new Harmony("cc.foxden.dv_industry");
+            harmony.PatchAll(Assembly.GetExecutingAssembly());
 
             return true;
         }
