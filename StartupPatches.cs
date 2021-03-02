@@ -21,6 +21,7 @@ namespace DVIndustry
             if( newIndustry == null )
             {
                 newIndustry = __instance.gameObject.AddComponent<IndustryController>();
+                newIndustry.Initialize();
                 DVIndustry.ModEntry.Logger.Log($"Added industry controller to {yardId}");
             }
         }

@@ -39,10 +39,22 @@ namespace DVIndustry
 
     public class IndustryController : MonoBehaviour
     {
+        public StationController StationController = null;
+        public string StationId => StationController?.stationInfo.YardID;
+
         protected readonly Dictionary<string, IndustryResource> stockpileMap;
         protected readonly List<IndustryResource> inputStockpile;
         protected readonly List<IndustryResource> outputStockpile;
         protected readonly List<IndustryProcess> processes;
+
+        public IEnumerable<IndustryResource> AllResources => stockpileMap.Values;
+
+        public void Initialize()
+        {
+            if( StationController == null ) StationController = gameObject.GetComponent<StationController>();
+
+            IndustrySaveDataManager.RegisterIndustry(this);
+        }
 
         public bool IsResourceAvailable( string resourceId, float amount )
         {
@@ -77,7 +89,7 @@ namespace DVIndustry
             DVIndustry.ModEntry.Logger.Warning($"Tried to store an input ({cargoType}) that this industry doesn't accept");
         }
 
-        protected void StoreResource( IndustryResource resource )
+        public void StoreResource( IndustryResource resource )
         {
             if( stockpileMap.TryGetValue(resource.Key, out IndustryResource stock) )
             {
@@ -85,7 +97,7 @@ namespace DVIndustry
                 return;
             }
 
-            DVIndustry.ModEntry.Logger.Warning($"Tried to store an output ({resource.AcceptedItems.ID}) that this industry doesn't produce");
+            DVIndustry.ModEntry.Logger.Warning($"Tried to store a resource ({resource.AcceptedItems.ID}) that this industry doesn't use");
         }
 
         public void OnEnable()
@@ -98,6 +110,8 @@ namespace DVIndustry
 
         public void Update()
         {
+            if( !IndustrySaveDataManager.IsLoadCompleted ) return;
+
             foreach( var process in processes )
             {
                 if( process.IsWorking && process.IsFinished )
