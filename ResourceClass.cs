@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Reflection;
 using DV.Logic.Job;
 
 namespace DVIndustry
@@ -12,19 +13,21 @@ namespace DVIndustry
         public readonly string ID;
         public readonly CargoType[] Cargos;
 
-        public ResourceClass( string id, IEnumerable<CargoType> types )
+        private ResourceClass() { }
+
+        private ResourceClass( string id, IEnumerable<CargoType> types )
         {
             ID = id;
             Cargos = types.ToArray();
         }
 
-        public ResourceClass( CargoType singleType, string overrideId = null )
+        private ResourceClass( CargoType singleType, string overrideId = null )
         {
             ID = overrideId ?? Enum.GetName(typeof(CargoType), singleType);
             Cargos = new CargoType[] { singleType };
         }
 
-        public ResourceClass( string id, IEnumerable<CargoType> types, params ResourceClass[] toInclude )
+        private ResourceClass( string id, IEnumerable<CargoType> types, params ResourceClass[] toInclude )
             : this(id, types.Union(toInclude.SelectMany(rc => rc.Cargos)))
         {
         }
@@ -47,6 +50,26 @@ namespace DVIndustry
         public override int GetHashCode()
         {
             return ID.GetHashCode();
+        }
+
+        // End Instance Members
+        // Static Members:
+
+        private static readonly Dictionary<CargoType, ResourceClass> singleResourceClassMap =
+            new Dictionary<CargoType, ResourceClass>();
+
+        public static ResourceClass SingleCargoClass( CargoType singleType )
+        {
+            if( singleResourceClassMap.TryGetValue(singleType, out var resource) )
+            {
+                return resource;
+            }
+            else
+            {
+                resource = new ResourceClass(singleType);
+                singleResourceClassMap[singleType] = resource;
+                return resource;
+            }
         }
 
         public static readonly ResourceClass AgProducts = new ResourceClass(
@@ -159,5 +182,46 @@ namespace DVIndustry
             Tooling,
             Clothing
         );
+
+
+        public static readonly Dictionary<string, ResourceClass> BuiltinClasses = new Dictionary<string, ResourceClass>();
+        //{
+        //    { AgProducts.ID, AgProducts },
+        //    { FreshFood.ID, FreshFood },
+        //    { Steel.ID, Steel },
+        //    { Lumber.ID, Lumber },
+        //    { NewVehicles.ID, NewVehicles },
+        //    { Electronics.ID, Electronics },
+        //    { Tooling.ID, Tooling },
+        //    { Clothing.ID, Clothing },
+        //    { ConsumerGoods.ID, ConsumerGoods }
+        //};
+
+        static ResourceClass()
+        {
+            // get all public ResourceClass Fields
+            var builtinClassFields = typeof(ResourceClass).GetFields(BindingFlags.Public|BindingFlags.Static)
+                .Where(f => f.FieldType.Equals(typeof(ResourceClass)));
+
+            foreach( FieldInfo field in builtinClassFields )
+            {
+                ResourceClass resource = field.GetValue(null) as ResourceClass;
+                BuiltinClasses[resource.ID] = resource;
+            }
+        }
+
+        public static bool TryParse( string id, out ResourceClass resource )
+        {
+            if( BuiltinClasses.TryGetValue(id, out resource) )
+            {
+                return true;
+            }
+            else if( Enum.TryParse(id, out CargoType cargo) )
+            {
+                resource = SingleCargoClass(cargo);
+                return true;
+            }
+            return false;
+        }
     }
 }

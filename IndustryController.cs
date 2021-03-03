@@ -9,7 +9,7 @@ namespace DVIndustry
 {
     public class IndustryResource
     {
-        public ResourceClass AcceptedItems;
+        public readonly ResourceClass AcceptedItems;
         public float Amount;
 
         public string Key => AcceptedItems?.ID;
@@ -21,19 +21,24 @@ namespace DVIndustry
         }
 
         public IndustryResource( CargoType singleType, float amount )
-            : this(new ResourceClass(singleType), amount)
+            : this(ResourceClass.SingleCargoClass(singleType), amount)
         { }
+
+        public IndustryResource CloneEmpty()
+        {
+            return new IndustryResource(AcceptedItems, 0);
+        }
     }
 
     public class IndustryProcess
     {
-        public int ProcessingTime;
+        public float ProcessingTime;
         public IndustryResource[] Inputs;
         public IndustryResource[] Outputs;
 
         public float StartTime;
 
-        public bool IsWorking { get; set; }
+        public bool IsWorking { get; set; } = false;
         public bool IsFinished => (Time.time - StartTime) >= ProcessingTime;
     }
 
@@ -42,16 +47,30 @@ namespace DVIndustry
         public StationController StationController = null;
         public string StationId => StationController?.stationInfo.YardID;
 
-        protected readonly Dictionary<string, IndustryResource> stockpileMap;
-        protected readonly List<IndustryResource> inputStockpile;
-        protected readonly List<IndustryResource> outputStockpile;
-        protected readonly List<IndustryProcess> processes;
+        protected Dictionary<string, IndustryResource> stockpileMap;
+        protected IndustryResource[] inputStockpile;
+        protected IndustryResource[] outputStockpile;
+        protected IndustryProcess[] processes;
 
         public IEnumerable<IndustryResource> AllResources => stockpileMap.Values;
 
         public void Initialize()
         {
             if( StationController == null ) StationController = gameObject.GetComponent<StationController>();
+
+            processes = IndustryConfigManager.GetConfig(StationId);
+            if( processes == null )
+            {
+                DVIndustry.ModEntry.Logger.Error($"Failed to set processes on industry at {StationId}");
+                return;
+            }
+
+            // Create stockpiles for each process I/O resource
+            inputStockpile = processes.SelectMany(proc => proc.Inputs.Select(r => r.CloneEmpty())).ToArray();
+            outputStockpile = processes.SelectMany(proc => proc.Outputs.Select(r => r.CloneEmpty())).ToArray();
+
+            // Add references for all stockpiles to the map
+            stockpileMap = inputStockpile.Union(outputStockpile).ToDictionary(res => res.Key, res => res);
 
             IndustrySaveDataManager.RegisterIndustry(this);
         }

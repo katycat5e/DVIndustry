@@ -50,6 +50,7 @@
     <Reference Include="UnityModManager, Version=0.23.0.0, Culture=neutral, processorArchitecture=MSIL" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="IndustryConfigManager.cs" />
     <Compile Include="IndustrySaveDataManager.cs" />
     <Compile Include="ResourceClass.cs" />
     <Compile Include="DVIndustry.cs" />

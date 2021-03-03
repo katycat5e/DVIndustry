@@ -15,6 +15,9 @@ namespace DVIndustry
         {
             ModEntry = modEntry;
 
+            bool success = IndustryConfigManager.LoadConfig();
+            if( !success ) return false;
+
             var harmony = new Harmony("cc.foxden.dv_industry");
             harmony.PatchAll(Assembly.GetExecutingAssembly());
 
