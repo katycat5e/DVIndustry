@@ -54,11 +54,13 @@ namespace DVIndustry
 
         public IEnumerable<IndustryResource> AllResources => stockpileMap.Values;
 
+        protected bool waitingForLoadComplete = true;
+
         public void Initialize()
         {
             if( StationController == null ) StationController = gameObject.GetComponent<StationController>();
 
-            processes = IndustryConfigManager.GetConfig(StationId);
+            processes = IndustryConfigManager.GetProcesses(StationId);
             if( processes == null )
             {
                 DVIndustry.ModEntry.Logger.Error($"Failed to set processes on industry at {StationId}");
@@ -130,6 +132,17 @@ namespace DVIndustry
         public void Update()
         {
             if( !IndustrySaveDataManager.IsLoadCompleted ) return;
+
+            if( waitingForLoadComplete )
+            {
+                // need to grab saved state of resources before starting processing
+                foreach( IndustryResource resource in AllResources )
+                {
+                    resource.Amount = IndustrySaveDataManager.GetSavedStockpileAmount(StationId, resource.Key);
+                }
+
+                waitingForLoadComplete = false;
+            }
 
             foreach( var process in processes )
             {

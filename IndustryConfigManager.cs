@@ -12,15 +12,14 @@ namespace DVIndustry
     {
         private static readonly Dictionary<string, IndustryProcess[]> IndustryConfigs = new Dictionary<string, IndustryProcess[]>();
 
-        public static IndustryProcess[] GetConfig( string stationId )
+        public static IndustryProcess[] GetProcesses( string stationId )
         {
             if( IndustryConfigs.TryGetValue(stationId, out var processList) ) return processList;
             else return null;
         }
 
-        public static bool LoadConfig()
+        public static bool LoadConfig( string configPath )
         {
-            string configPath = Path.Combine(DVIndustry.ModEntry.Path, "industries.json");
             JSONIndustryConfigList config;
 
             try
@@ -67,10 +66,11 @@ namespace DVIndustry
         {
             process = new IndustryProcess() { ProcessingTime = jsonProcess.Time };
 
-            process.Inputs = new IndustryResource[jsonProcess.Inputs.Length];
-            for( int i = 0; i < jsonProcess.Inputs.Length; i++ )
+            process.Inputs = new IndustryResource[jsonProcess.Inputs.Count];
+            int i = 0;
+            foreach( var kvp in jsonProcess.Inputs )
             {
-                if( TryConvertResource(jsonProcess.Inputs[i], out IndustryResource resource) )
+                if( TryConvertResource(kvp.Key, kvp.Value, out IndustryResource resource) )
                 {
                     process.Inputs[i] = resource;
                 }
@@ -79,12 +79,15 @@ namespace DVIndustry
                     DVIndustry.ModEntry.Logger.Critical("Invalid process input");
                     return false;
                 }
+
+                i++;
             }
 
-            process.Outputs = new IndustryResource[jsonProcess.Outputs.Length];
-            for( int i = 0; i < jsonProcess.Outputs.Length; i++ )
+            process.Outputs = new IndustryResource[jsonProcess.Outputs.Count];
+            i = 0;
+            foreach( var kvp in jsonProcess.Outputs )
             {
-                if( TryConvertResource(jsonProcess.Inputs[i], out IndustryResource resource) )
+                if( TryConvertResource(kvp.Key, kvp.Value, out IndustryResource resource) )
                 {
                     process.Outputs[i] = resource;
                 }
@@ -93,21 +96,23 @@ namespace DVIndustry
                     DVIndustry.ModEntry.Logger.Critical("Invalid process output");
                     return false;
                 }
+
+                i++;
             }
 
             return true;
         }
 
-        private static bool TryConvertResource( Tuple<string, float> json, out IndustryResource resource )
+        private static bool TryConvertResource( string key, float amount, out IndustryResource resource )
         {
-            if( ResourceClass.TryParse(json.Item1, out ResourceClass rClass) )
+            if( ResourceClass.TryParse(key, out ResourceClass rClass) )
             {
-                resource = new IndustryResource(rClass, json.Item2);
+                resource = new IndustryResource(rClass, amount);
                 return true;
             }
 
             resource = null;
-            DVIndustry.ModEntry.Logger.Critical($"Unrecognized resource class \"{json.Item1}\"");
+            DVIndustry.ModEntry.Logger.Critical($"Unrecognized resource class \"{key}\"");
             return false;
         }
 
@@ -126,8 +131,9 @@ namespace DVIndustry
         private class JSONIndustryProcess
         {
             public float Time;
-            public Tuple<string, float>[] Inputs;
-            public Tuple<string, float>[] Outputs;
+
+            public Dictionary<string, float> Inputs;
+            public Dictionary<string, float> Outputs;
         }
     }
 }

@@ -52,6 +52,11 @@ namespace DVIndustry
             return ID.GetHashCode();
         }
 
+        public override string ToString()
+        {
+            return $"[ResourceClass: {ID}]";
+        }
+
         // End Instance Members
         // Static Members:
 

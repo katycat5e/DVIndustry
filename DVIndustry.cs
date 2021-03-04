@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using HarmonyLib;
@@ -15,8 +16,12 @@ namespace DVIndustry
         {
             ModEntry = modEntry;
 
-            bool success = IndustryConfigManager.LoadConfig();
-            if( !success ) return false;
+            string configPath = Path.Combine(ModEntry.Path, "industries.json");
+            if( !IndustryConfigManager.LoadConfig(configPath) )
+            {
+                ModEntry.Logger.Critical("Industry configuration file not found");
+                return false;
+            }
 
             var harmony = new Harmony("cc.foxden.dv_industry");
             harmony.PatchAll(Assembly.GetExecutingAssembly());
