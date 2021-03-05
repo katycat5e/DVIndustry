@@ -70,7 +70,7 @@ namespace DVIndustry
             int i = 0;
             foreach( var kvp in jsonProcess.Inputs )
             {
-                if( TryConvertResource(kvp.Key, kvp.Value, out IndustryResource resource) )
+                if( IndustryResource.TryParse(kvp.Key, kvp.Value, out IndustryResource resource) )
                 {
                     process.Inputs[i] = resource;
                 }
@@ -87,7 +87,7 @@ namespace DVIndustry
             i = 0;
             foreach( var kvp in jsonProcess.Outputs )
             {
-                if( TryConvertResource(kvp.Key, kvp.Value, out IndustryResource resource) )
+                if( IndustryResource.TryParse(kvp.Key, kvp.Value, out IndustryResource resource) )
                 {
                     process.Outputs[i] = resource;
                 }
@@ -101,19 +101,6 @@ namespace DVIndustry
             }
 
             return true;
-        }
-
-        private static bool TryConvertResource( string key, float amount, out IndustryResource resource )
-        {
-            if( ResourceClass.TryParse(key, out ResourceClass rClass) )
-            {
-                resource = new IndustryResource(rClass, amount);
-                return true;
-            }
-
-            resource = null;
-            DVIndustry.ModEntry.Logger.Critical($"Unrecognized resource class \"{key}\"");
-            return false;
         }
 
 

@@ -60,12 +60,15 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="IndustryConfigManager.cs" />
+    <Compile Include="IndustryResource.cs" />
     <Compile Include="IndustrySaveDataManager.cs" />
+    <Compile Include="Patches_ChainController.cs" />
     <Compile Include="ResourceClass.cs" />
     <Compile Include="DVIndustry.cs" />
     <Compile Include="IndustryController.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="StartupPatches.cs" />
+    <Compile Include="YardTransLoadController.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup Condition=" '$MSBuildRuntimeType' != 'Mono' ">

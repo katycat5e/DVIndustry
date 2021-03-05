@@ -10,13 +10,22 @@ namespace DVIndustry
 {
     public class IndustrySaveDataItem
     {
-        public readonly string StationId;
-        public readonly IndustryResource[] StockPiles;
+        public string StationId = null;
+        public Dictionary<string, float> StockPiles = null;
+
+        public IndustrySaveDataItem() { }
 
         public IndustrySaveDataItem( string station, IEnumerable<IndustryResource> stocks )
         {
             StationId = station;
-            StockPiles = stocks.ToArray();
+            if( stocks == null )
+            {
+                StockPiles = new Dictionary<string, float>();
+            }
+            else
+            {
+                StockPiles = stocks.ToDictionary(s => s.Key, s => s.Amount);
+            }
         }
     }
 
@@ -56,13 +65,41 @@ namespace DVIndustry
             return 0f;
         }
 
+        private static IEnumerator<IndustryResource> ProcessStockpiles( IndustrySaveDataItem industryData )
+        {
+            if( industryData.StockPiles == null ) yield break;
+
+            foreach( var kvp in industryData.StockPiles )
+            {
+                if( IndustryResource.TryParse(kvp.Key, kvp.Value, out IndustryResource nextRes) )
+                {
+                    // successfully parsed
+                    yield return nextRes;
+                }
+                else
+                {
+                    DVIndustry.ModEntry.Logger.Warning($"Invalid stockpile resource at {industryData.StationId}");
+                }
+            }
+
+            yield break;
+        }
+
         public static void LoadIndustryData()
         {
             if( SaveGameManager.data.GetObject<IndustrySaveData>(SAVE_KEY, serializerSettings) is IndustrySaveData saveData )
             {
                 foreach( IndustrySaveDataItem industry in saveData.Industries )
                 {
-                    stockpileSaveData[industry.StationId] = industry.StockPiles.ToList();
+                    var stockList = new List<IndustryResource>();
+
+                    IEnumerator<IndustryResource> stocks = ProcessStockpiles(industry);
+                    while( stocks.MoveNext() )
+                    {
+                        stockList.Add(stocks.Current);
+                    }
+
+                    stockpileSaveData[industry.StationId] = stockList;
                 }
             }
 

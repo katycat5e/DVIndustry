@@ -7,29 +7,6 @@ using UnityEngine;
 
 namespace DVIndustry
 {
-    public class IndustryResource
-    {
-        public readonly ResourceClass AcceptedItems;
-        public float Amount;
-
-        public string Key => AcceptedItems?.ID;
-
-        public IndustryResource( ResourceClass accepted, float amount )
-        {
-            AcceptedItems = accepted;
-            Amount = amount;
-        }
-
-        public IndustryResource( CargoType singleType, float amount )
-            : this(ResourceClass.SingleCargoClass(singleType), amount)
-        { }
-
-        public IndustryResource CloneEmpty()
-        {
-            return new IndustryResource(AcceptedItems, 0);
-        }
-    }
-
     public class IndustryProcess
     {
         public float ProcessingTime;
@@ -56,15 +33,17 @@ namespace DVIndustry
 
         protected bool waitingForLoadComplete = true;
 
-        public void Initialize()
+        public void Initialize( IndustryProcess[] processConfig )
         {
             if( StationController == null ) StationController = gameObject.GetComponent<StationController>();
 
-            processes = IndustryConfigManager.GetProcesses(StationId);
-            if( processes == null )
+            processes = processConfig;
+            if( processes != null )
             {
-                DVIndustry.ModEntry.Logger.Error($"Failed to set processes on industry at {StationId}");
-                return;
+                foreach( var proc in processes )
+                {
+                    proc.IsWorking = false;
+                }
             }
 
             // Create stockpiles for each process I/O resource
@@ -123,6 +102,8 @@ namespace DVIndustry
 
         public void OnEnable()
         {
+            if( processes == null ) return;
+
             foreach( var process in processes )
             {
                 process.IsWorking = false;

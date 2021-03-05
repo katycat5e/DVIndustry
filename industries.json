@@ -1,0 +1,14 @@
+{
+	"Industries": [
+		{
+			"StationId": "FF",
+			"Processes": [
+				{
+					"Time": 10.0,
+					"Inputs": { "AgProducts": 1 },
+					"Outputs": { "FreshFood": 1 }
+				}
+			]
+		}
+	]
+}
