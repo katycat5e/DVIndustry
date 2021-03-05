@@ -8,19 +8,10 @@ using DV.Logic.Job;
 
 namespace DVIndustry
 {
-    public class YardTransLoadController : MonoBehaviour
+    public class YardTransLoadController : ControllerBase<YardTransLoadController>
     {
         private const float LOAD_UNLOAD_DELAY = 10f;
         private const float CAR_STOPPED_EPSILON = 0.2f;
-
-        private static readonly Dictionary<string, YardTransLoadController> controllerDict =
-            new Dictionary<string, YardTransLoadController>();
-
-        public static YardTransLoadController At( string yardId )
-        {
-            if( controllerDict.TryGetValue(yardId, out var controller) ) return controller;
-            else return null;
-        }
 
         public IndustryController AttachedIndustry = null;
         public StationController StationController = null;
@@ -41,7 +32,7 @@ namespace DVIndustry
             AttachedIndustry = gameObject.GetComponent<IndustryController>();
             StationController = gameObject.GetComponent<StationController>();
 
-            controllerDict.Add(StationController.stationInfo.YardID, this);
+            RegisterController(StationController.stationInfo.YardID, this);
         }
 
         void Update()

@@ -59,8 +59,10 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="ControllerBase.cs" />
     <Compile Include="IndustryConfigManager.cs" />
     <Compile Include="IndustryResource.cs" />
+    <Compile Include="IndustrySaveData.cs" />
     <Compile Include="IndustrySaveDataManager.cs" />
     <Compile Include="Patches_ChainController.cs" />
     <Compile Include="ResourceClass.cs" />

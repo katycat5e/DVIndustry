@@ -19,7 +19,7 @@ namespace DVIndustry
         public bool IsFinished => (Time.time - StartTime) >= ProcessingTime;
     }
 
-    public class IndustryController : MonoBehaviour
+    public class IndustryController : ControllerBase<IndustryController>
     {
         public StationController StationController = null;
         public string StationId => StationController?.stationInfo.YardID;
@@ -36,6 +36,7 @@ namespace DVIndustry
         public void Initialize( IndustryProcess[] processConfig )
         {
             if( StationController == null ) StationController = gameObject.GetComponent<StationController>();
+            RegisterController(StationId, this);
 
             processes = processConfig;
             if( processes != null )
@@ -52,8 +53,6 @@ namespace DVIndustry
 
             // Add references for all stockpiles to the map
             stockpileMap = inputStockpile.Union(outputStockpile).ToDictionary(res => res.Key, res => res);
-
-            IndustrySaveDataManager.RegisterIndustry(this);
         }
 
         public bool IsResourceAvailable( string resourceId, float amount )
@@ -113,17 +112,6 @@ namespace DVIndustry
         public void Update()
         {
             if( !IndustrySaveDataManager.IsLoadCompleted ) return;
-
-            if( waitingForLoadComplete )
-            {
-                // need to grab saved state of resources before starting processing
-                foreach( IndustryResource resource in AllResources )
-                {
-                    resource.Amount = IndustrySaveDataManager.GetSavedStockpileAmount(StationId, resource.Key);
-                }
-
-                waitingForLoadComplete = false;
-            }
 
             foreach( var process in processes )
             {

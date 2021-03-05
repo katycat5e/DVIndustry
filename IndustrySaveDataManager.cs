@@ -8,32 +8,6 @@ using Newtonsoft.Json;
 
 namespace DVIndustry
 {
-    public class IndustrySaveDataItem
-    {
-        public string StationId = null;
-        public Dictionary<string, float> StockPiles = null;
-
-        public IndustrySaveDataItem() { }
-
-        public IndustrySaveDataItem( string station, IEnumerable<IndustryResource> stocks )
-        {
-            StationId = station;
-            if( stocks == null )
-            {
-                StockPiles = new Dictionary<string, float>();
-            }
-            else
-            {
-                StockPiles = stocks.ToDictionary(s => s.Key, s => s.Amount);
-            }
-        }
-    }
-
-    public class IndustrySaveData
-    {
-        public IndustrySaveDataItem[] Industries;
-    }
-
     public static class IndustrySaveDataManager
     {
         const string SAVE_KEY = "DVIndustry";
@@ -44,13 +18,7 @@ namespace DVIndustry
 
         public static bool IsLoadCompleted { get; private set; } = false;
 
-        private static readonly List<IndustryController> trackedIndustries = new List<IndustryController>();
         private static readonly Dictionary<string, List<IndustryResource>> stockpileSaveData = new Dictionary<string, List<IndustryResource>>();
-
-        public static void RegisterIndustry( IndustryController industry )
-        {
-            trackedIndustries.Add(industry);
-        }
 
         public static float GetSavedStockpileAmount( string stationId, string resourceId )
         {
@@ -89,6 +57,8 @@ namespace DVIndustry
         {
             if( SaveGameManager.data.GetObject<IndustrySaveData>(SAVE_KEY, serializerSettings) is IndustrySaveData saveData )
             {
+                // found DVIndustry save data
+                // Restore saved stockpile amounts
                 foreach( IndustrySaveDataItem industry in saveData.Industries )
                 {
                     var stockList = new List<IndustryResource>();
@@ -100,18 +70,17 @@ namespace DVIndustry
                     }
 
                     stockpileSaveData[industry.StationId] = stockList;
-                }
-            }
 
-            foreach( IndustryController controller in trackedIndustries )
-            {
-                if( stockpileSaveData.TryGetValue(controller.StationId, out var resourceList) )
-                {
-                    foreach( IndustryResource resource in resourceList )
+                    if( IndustryController.At(industry.StationId) is IndustryController controller )
                     {
-                        controller.StoreResource(resource);
+                        foreach( IndustryResource resource in stockList )
+                        {
+                            controller.StoreResource(resource);
+                        }
                     }
                 }
+
+                // 
             }
 
             IsLoadCompleted = true;
@@ -120,13 +89,14 @@ namespace DVIndustry
 
         public static void SaveIndustryData()
         {
-            var saveItems = new IndustrySaveDataItem[trackedIndustries.Count];
+            var saveItems = new IndustrySaveDataItem[IndustryController.ControllerCount];
 
-            for( int i = 0; i < trackedIndustries.Count; i++ )
+            int i = 0;
+            foreach( var industry in IndustryController.AllControllers )
             {
-                var resources = trackedIndustries[i].AllResources;
-                stockpileSaveData[trackedIndustries[i].StationId] = resources.ToList();
-                saveItems[i] = new IndustrySaveDataItem(trackedIndustries[i].StationId, resources);
+                var resources = industry.AllResources;
+                stockpileSaveData[industry.StationId] = resources.ToList();
+                saveItems[i] = new IndustrySaveDataItem(industry.StationId, resources);
             }
 
             var industryData = new IndustrySaveData()
