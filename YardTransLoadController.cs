@@ -8,13 +8,12 @@ using DV.Logic.Job;
 
 namespace DVIndustry
 {
-    public class YardTransLoadController : ControllerBase<YardTransLoadController>
+    public class YardTransLoadController : ControllerBase<YardTransLoadController, YardControllerSaveData>
     {
         private const float LOAD_UNLOAD_DELAY = 10f;
         private const float CAR_STOPPED_EPSILON = 0.2f;
 
         public IndustryController AttachedIndustry = null;
-        public StationController StationController = null;
 
         private readonly Queue<List<TrainCar>> incomingConsistQueue = new Queue<List<TrainCar>>();
         private List<TrainCar> currentUnloadConsist = null;
@@ -30,9 +29,9 @@ namespace DVIndustry
         void OnEnable()
         {
             AttachedIndustry = gameObject.GetComponent<IndustryController>();
-            StationController = gameObject.GetComponent<StationController>();
+            AttachedStation = gameObject.GetComponent<StationController>();
 
-            RegisterController(StationController.stationInfo.YardID, this);
+            RegisterController(AttachedStation.stationInfo.YardID, this);
         }
 
         void Update()
@@ -66,6 +65,61 @@ namespace DVIndustry
                     AttachedIndustry.StoreInputCargo(loadedType, loadedAmount);
                     currentUnloadIdx += 1; // move to next car in consist
                 }
+            }
+        }
+
+        public override YardControllerSaveData GetSaveData()
+        {
+            List<TrainCar>[] consists = incomingConsistQueue.ToArray();
+
+            string[][] waitingCarGuids = new string[consists.Length][];
+            for( int i = 0; i < consists.Length; i++ )
+            {
+                waitingCarGuids[i] = consists[i].Select(car => car.CarGUID).ToArray();
+            }
+
+            return new YardControllerSaveData()
+            {
+                StationId = StationId,
+                IncomingCars = waitingCarGuids,
+                CurrentUnloadCars = currentUnloadConsist.Select(car => car.CarGUID).ToArray(),
+                CurrentUnloadIdx = currentUnloadIdx
+            };
+        }
+
+        public override void ApplySaveData( YardControllerSaveData data )
+        {
+            foreach( string[] consistIds in data.IncomingCars )
+            {
+                List<TrainCar> parsedCars = Utilities.GetTrainCarsFromCarGuids(consistIds);
+                if( parsedCars != null )
+                {
+                    incomingConsistQueue.Enqueue(parsedCars);
+                }
+                else
+                {
+                    DVIndustry.ModEntry.Logger.Warning($"Couldn't find incoming consist for yard controller at {StationId}");
+                }
+            }
+
+            if( (data.CurrentUnloadCars != null) && (data.CurrentUnloadCars.Length > 0) )
+            {
+                currentUnloadConsist = Utilities.GetTrainCarsFromCarGuids(data.CurrentUnloadCars);
+                if( currentUnloadConsist != null )
+                {
+                    currentUnloadIdx = data.CurrentUnloadIdx;
+                }
+                else
+                {
+                    DVIndustry.ModEntry.Logger.Warning($"Couldn't find unloading consist for yard controller at {StationId}");
+                    currentUnloadConsist = null;
+                    currentUnloadIdx = 0;
+                }
+            }
+            else
+            {
+                currentUnloadConsist = null;
+                currentUnloadIdx = 0;
             }
         }
     }

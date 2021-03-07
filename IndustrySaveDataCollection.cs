@@ -3,20 +3,20 @@ using System.Linq;
 
 namespace DVIndustry
 {
-    public class IndustrySaveData
+    public class IndustrySaveDataCollection
     {
-        public IndustrySaveDataItem[] Industries;
+        public IndustrySaveData[] Industries;
         public YardControllerSaveData[] Yards;
     }
 
-    public class IndustrySaveDataItem
+    public class IndustrySaveData
     {
         public string StationId = null;
         public Dictionary<string, float> StockPiles = null;
 
-        public IndustrySaveDataItem() { }
+        public IndustrySaveData() { }
 
-        public IndustrySaveDataItem( string station, IEnumerable<IndustryResource> stocks )
+        public IndustrySaveData( string station, IEnumerable<IndustryResource> stocks )
         {
             StationId = station;
             if( stocks == null )
@@ -33,8 +33,8 @@ namespace DVIndustry
     public class YardControllerSaveData
     {
         public string StationId = null;
-        public string[][] incomingCars;
-        public string[] currentUnloadCars;
-        public int currentUnloadIdx;
+        public string[][] IncomingCars;
+        public string[] CurrentUnloadCars;
+        public int CurrentUnloadIdx;
     }
 }

@@ -7,9 +7,13 @@ using UnityEngine;
 
 namespace DVIndustry
 {
-    public abstract class ControllerBase<T> : MonoBehaviour
-        where T : ControllerBase<T>
+    public abstract class ControllerBase<T, SaveType> : MonoBehaviour
+        where T : ControllerBase<T, SaveType>
     {
+        protected StationController AttachedStation = null;
+
+        public string StationId => AttachedStation?.stationInfo.YardID;
+
         protected static readonly Dictionary<string, T> controllerDict =
                new Dictionary<string, T>();
 
@@ -26,5 +30,8 @@ namespace DVIndustry
         {
             controllerDict[id] = controller;
         }
+
+        public abstract SaveType GetSaveData();
+        public abstract void ApplySaveData( SaveType data );
     }
 }

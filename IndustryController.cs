@@ -19,11 +19,8 @@ namespace DVIndustry
         public bool IsFinished => (Time.time - StartTime) >= ProcessingTime;
     }
 
-    public class IndustryController : ControllerBase<IndustryController>
+    public class IndustryController : ControllerBase<IndustryController, IndustrySaveData>
     {
-        public StationController StationController = null;
-        public string StationId => StationController?.stationInfo.YardID;
-
         protected Dictionary<string, IndustryResource> stockpileMap;
         protected IndustryResource[] inputStockpile;
         protected IndustryResource[] outputStockpile;
@@ -35,9 +32,6 @@ namespace DVIndustry
 
         public void Initialize( IndustryProcess[] processConfig )
         {
-            if( StationController == null ) StationController = gameObject.GetComponent<StationController>();
-            RegisterController(StationId, this);
-
             processes = processConfig;
             if( processes != null )
             {
@@ -101,6 +95,9 @@ namespace DVIndustry
 
         public void OnEnable()
         {
+            AttachedStation = gameObject.GetComponent<StationController>();
+            RegisterController(StationId, this);
+
             if( processes == null ) return;
 
             foreach( var process in processes )
@@ -150,6 +147,42 @@ namespace DVIndustry
                         StoreResource(ingred);
                     }
                 }
+            }
+        }
+
+        public override IndustrySaveData GetSaveData()
+        {
+            return new IndustrySaveData(StationId, AllResources);
+        }
+
+        private static IEnumerator<IndustryResource> ProcessStockpiles( IndustrySaveData industryData )
+        {
+            if( industryData.StockPiles == null ) yield break;
+
+            foreach( var kvp in industryData.StockPiles )
+            {
+                if( IndustryResource.TryParse(kvp.Key, kvp.Value, out IndustryResource nextRes) )
+                {
+                    // successfully parsed
+                    yield return nextRes;
+                }
+                else
+                {
+                    DVIndustry.ModEntry.Logger.Warning($"Invalid stockpile resource at {industryData.StationId}");
+                }
+            }
+
+            yield break;
+        }
+
+        public override void ApplySaveData( IndustrySaveData data )
+        {
+            var stonks = ProcessStockpiles(data);
+
+            while( stonks.MoveNext() )
+            {
+                IndustryResource resource = stonks.Current;
+                StoreResource(resource);
             }
         }
     }

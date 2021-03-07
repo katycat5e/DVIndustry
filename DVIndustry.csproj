@@ -62,9 +62,10 @@
     <Compile Include="ControllerBase.cs" />
     <Compile Include="IndustryConfigManager.cs" />
     <Compile Include="IndustryResource.cs" />
-    <Compile Include="IndustrySaveData.cs" />
+    <Compile Include="IndustrySaveDataCollection.cs" />
     <Compile Include="IndustrySaveDataManager.cs" />
     <Compile Include="Patches_ChainController.cs" />
+    <Compile Include="Utilities.cs" />
     <Compile Include="ResourceClass.cs" />
     <Compile Include="DVIndustry.cs" />
     <Compile Include="IndustryController.cs" />

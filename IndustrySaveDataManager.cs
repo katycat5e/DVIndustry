@@ -18,69 +18,37 @@ namespace DVIndustry
 
         public static bool IsLoadCompleted { get; private set; } = false;
 
-        private static readonly Dictionary<string, List<IndustryResource>> stockpileSaveData = new Dictionary<string, List<IndustryResource>>();
 
-        public static float GetSavedStockpileAmount( string stationId, string resourceId )
-        {
-            if( stockpileSaveData.TryGetValue(stationId, out var resourceList) )
-            {
-                foreach( IndustryResource r in resourceList )
-                {
-                    if( string.Equals(resourceId, r.Key) ) return r.Amount;
-                }
-            }
-
-            return 0f;
-        }
-
-        private static IEnumerator<IndustryResource> ProcessStockpiles( IndustrySaveDataItem industryData )
-        {
-            if( industryData.StockPiles == null ) yield break;
-
-            foreach( var kvp in industryData.StockPiles )
-            {
-                if( IndustryResource.TryParse(kvp.Key, kvp.Value, out IndustryResource nextRes) )
-                {
-                    // successfully parsed
-                    yield return nextRes;
-                }
-                else
-                {
-                    DVIndustry.ModEntry.Logger.Warning($"Invalid stockpile resource at {industryData.StationId}");
-                }
-            }
-
-            yield break;
-        }
+        
 
         public static void LoadIndustryData()
         {
-            if( SaveGameManager.data.GetObject<IndustrySaveData>(SAVE_KEY, serializerSettings) is IndustrySaveData saveData )
+            if( SaveGameManager.data.GetObject<IndustrySaveDataCollection>(SAVE_KEY, serializerSettings) is IndustrySaveDataCollection saveData )
             {
                 // found DVIndustry save data
                 // Restore saved stockpile amounts
-                foreach( IndustrySaveDataItem industry in saveData.Industries )
+                if( saveData.Industries != null )
                 {
-                    var stockList = new List<IndustryResource>();
-
-                    IEnumerator<IndustryResource> stocks = ProcessStockpiles(industry);
-                    while( stocks.MoveNext() )
+                    foreach( IndustrySaveData indData in saveData.Industries )
                     {
-                        stockList.Add(stocks.Current);
-                    }
-
-                    stockpileSaveData[industry.StationId] = stockList;
-
-                    if( IndustryController.At(industry.StationId) is IndustryController controller )
-                    {
-                        foreach( IndustryResource resource in stockList )
+                        if( IndustryController.At(indData.StationId) is IndustryController controller )
                         {
-                            controller.StoreResource(resource);
+                            controller.ApplySaveData(indData);
                         }
                     }
                 }
 
-                // 
+                // Restore yard load/unload controller state
+                if( saveData.Yards != null )
+                {
+                    foreach( YardControllerSaveData yardData in saveData.Yards )
+                    {
+                        if( YardTransLoadController.At(yardData.StationId) is YardTransLoadController controller )
+                        {
+                            controller.ApplySaveData(yardData);
+                        }
+                    }
+                }
             }
 
             IsLoadCompleted = true;
@@ -89,19 +57,16 @@ namespace DVIndustry
 
         public static void SaveIndustryData()
         {
-            var saveItems = new IndustrySaveDataItem[IndustryController.ControllerCount];
+            IndustrySaveData[] indData = IndustryController.AllControllers
+                .Select(ind => ind.GetSaveData()).ToArray();
 
-            int i = 0;
-            foreach( var industry in IndustryController.AllControllers )
-            {
-                var resources = industry.AllResources;
-                stockpileSaveData[industry.StationId] = resources.ToList();
-                saveItems[i] = new IndustrySaveDataItem(industry.StationId, resources);
-            }
+            YardControllerSaveData[] yardData = YardTransLoadController.AllControllers
+                .Select(yard => yard.GetSaveData()).ToArray();
 
-            var industryData = new IndustrySaveData()
+            var industryData = new IndustrySaveDataCollection()
             {
-                Industries = saveItems
+                Industries = indData,
+                Yards = yardData
             };
 
             SaveGameManager.data.SetObject(SAVE_KEY, industryData, serializerSettings);
