@@ -65,6 +65,7 @@
     <Compile Include="IndustrySaveDataCollection.cs" />
     <Compile Include="IndustrySaveDataManager.cs" />
     <Compile Include="Patches_ChainController.cs" />
+    <Compile Include="ShipmentOrganizer.cs" />
     <Compile Include="Utilities.cs" />
     <Compile Include="ResourceClass.cs" />
     <Compile Include="DVIndustry.cs" />

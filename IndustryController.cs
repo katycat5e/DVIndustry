@@ -26,6 +26,8 @@ namespace DVIndustry
         protected IndustryResource[] outputStockpile;
         protected IndustryProcess[] processes;
 
+        protected Dictionary<string, float> resourceRates = new Dictionary<string, float>();
+
         public IEnumerable<IndustryResource> AllResources => stockpileMap.Values;
 
         protected bool waitingForLoadComplete = true;
@@ -47,6 +49,25 @@ namespace DVIndustry
 
             // Add references for all stockpiles to the map
             stockpileMap = inputStockpile.Union(outputStockpile).ToDictionary(res => res.Key, res => res);
+
+            CalculateProcessRates();
+        }
+
+        protected void CalculateProcessRates()
+        {
+            resourceRates.Clear();
+            foreach( IndustryProcess process in processes )
+            {
+                foreach( IndustryResource ingred in process.Inputs )
+                {
+                    if( !resourceRates.TryGetValue(ingred.Key, out float current) )
+                    {
+                        current = 0;
+                    }
+
+                    resourceRates[ingred.Key] = current + (ingred.Amount / process.ProcessingTime);
+                }
+            }
         }
 
         public bool IsResourceAvailable( string resourceId, float amount )
@@ -91,6 +112,21 @@ namespace DVIndustry
             }
 
             DVIndustry.ModEntry.Logger.Warning($"Tried to store a resource ({resource.AcceptedItems.ID}) that this industry doesn't use");
+        }
+
+        public float GetDemand( string resourceKey )
+        {
+            if( resourceRates.TryGetValue(resourceKey, out float consumeRate) )
+            {
+                double curAmount = stockpileMap[resourceKey].Amount;
+
+                // logistic curve for demand based on lack of resource (lower stock -> higher demand)
+                double amt40min = consumeRate * 2400;
+                double exponent = -(10f / amt40min) * (curAmount - (amt40min / 2));
+                return (float)(amt40min * 1.2d * (1 - 1 / (1 + Math.Exp(exponent))));
+            }
+
+            return 0;
         }
 
         public void OnEnable()
