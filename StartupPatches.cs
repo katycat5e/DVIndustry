@@ -25,7 +25,7 @@ namespace DVIndustry
                 newIndustry.Initialize(processes);
                 DVIndustry.ModEntry.Logger.Log($"Added industry controller to {yardId}");
 
-                var loadController = __instance.gameObject.AddComponent<YardTransLoadController>();
+                var loadController = __instance.gameObject.AddComponent<YardController>();
                 DVIndustry.ModEntry.Logger.Log($"Added yard load/unload controller to {yardId}");
             }
         }

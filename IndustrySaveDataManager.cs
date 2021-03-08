@@ -43,7 +43,7 @@ namespace DVIndustry
                 {
                     foreach( YardControllerSaveData yardData in saveData.Yards )
                     {
-                        if( YardTransLoadController.At(yardData.StationId) is YardTransLoadController controller )
+                        if( YardController.At(yardData.StationId) is YardController controller )
                         {
                             controller.ApplySaveData(yardData);
                         }
@@ -60,7 +60,7 @@ namespace DVIndustry
             IndustrySaveData[] indData = IndustryController.AllControllers
                 .Select(ind => ind.GetSaveData()).ToArray();
 
-            YardControllerSaveData[] yardData = YardTransLoadController.AllControllers
+            YardControllerSaveData[] yardData = YardController.AllControllers
                 .Select(yard => yard.GetSaveData()).ToArray();
 
             var industryData = new IndustrySaveDataCollection()

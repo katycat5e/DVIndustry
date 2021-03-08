@@ -8,7 +8,7 @@ using DV.Logic.Job;
 
 namespace DVIndustry
 {
-    public class YardTransLoadController : ControllerBase<YardTransLoadController, YardControllerSaveData>
+    public class YardController : ControllerBase<YardController, YardControllerSaveData>
     {
         private const float LOAD_UNLOAD_DELAY = 10f;
         private const float CAR_STOPPED_EPSILON = 0.2f;
@@ -21,10 +21,6 @@ namespace DVIndustry
 
         private float lastUnloadTime = 0f;
 
-        public void HandleIncomingConsist( List<TrainCar> consist )
-        {
-            incomingConsistQueue.Enqueue(consist);
-        }
 
         void OnEnable()
         {
@@ -68,6 +64,12 @@ namespace DVIndustry
             }
         }
 
+        public void SaveCarStates()
+        {
+
+        }
+
+        // ControllerBase interface
         public override YardControllerSaveData GetSaveData()
         {
             List<TrainCar>[] consists = incomingConsistQueue.ToArray();
