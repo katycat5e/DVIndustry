@@ -33,16 +33,19 @@ namespace DVIndustry
         private IndustryController AttachedIndustry = null;
 
         private readonly List<YardControlConsist> consistList = new List<YardControlConsist>();
-        private YardTrackInfo[] LoadingTracks;
-        private YardTrackInfo[] StagingTracks;
+        private YardTrackInfo[] loadingTracks;
+        private YardTrackInfo[] stagingTracks;
+
+        private HashSet<Track> loadTrackSet;
 
         private float lastUnloadTime = 0f;
 
 
-        public void Initialize( YardTrackInfo[] loadTracks, YardTrackInfo[] stagingTracks )
+        public void Initialize( YardTrackInfo[] loadTracks, YardTrackInfo[] stageTracks )
         {
-            LoadingTracks = loadTracks;
-            StagingTracks = stagingTracks;
+            loadingTracks = loadTracks;
+            stagingTracks = stageTracks;
+            loadTrackSet = loadTracks.Select(t => t.Track).ToHashSet();
         }
 
         void OnEnable()
@@ -55,6 +58,9 @@ namespace DVIndustry
 
         void Update()
         {
+            // wait for loading to finish
+            if( !IndustrySaveDataManager.IsLoadCompleted ) return;
+
             float curTime = Time.time;
 
             // check if any consists are done
