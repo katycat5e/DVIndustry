@@ -2,19 +2,33 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using DV.Logic.Job;
 using Newtonsoft.Json;
 
 namespace DVIndustry
 {
     public static class IndustryConfigManager
     {
-        private static readonly Dictionary<string, IndustryProcess[]> IndustryConfigs = new Dictionary<string, IndustryProcess[]>();
+        private static readonly Dictionary<string, IndustryProcess[]> industryConfigs = new Dictionary<string, IndustryProcess[]>();
+
+        private static readonly Dictionary<string, YardTrackInfo[]> yardLoadingTracks = new Dictionary<string, YardTrackInfo[]>();
+        private static readonly Dictionary<string, YardTrackInfo[]> yardStagingTracks = new Dictionary<string, YardTrackInfo[]>();
 
         public static IndustryProcess[] GetProcesses( string stationId )
         {
-            if( IndustryConfigs.TryGetValue(stationId, out var processList) ) return processList;
+            if( industryConfigs.TryGetValue(stationId, out var processList) ) return processList;
+            else return null;
+        }
+
+        public static YardTrackInfo[] GetLoadingTracks( string stationId )
+        {
+            if( yardLoadingTracks.TryGetValue(stationId, out var trackList) ) return trackList;
+            else return null;
+        }
+
+        public static YardTrackInfo[] GetStagingTracks( string stationId )
+        {
+            if( yardStagingTracks.TryGetValue(stationId, out var trackList) ) return trackList;
             else return null;
         }
 
@@ -22,6 +36,7 @@ namespace DVIndustry
         {
             JSONIndustryConfigList config;
 
+            // Try to load the config file from disk
             try
             {
                 string json = File.ReadAllText(configPath);
@@ -40,6 +55,7 @@ namespace DVIndustry
                 return false;
             }
 
+            // Parse the industry controller configurations
             foreach( JSONIndustryConfig jsonIndustry in config.Industries )
             {
                 var processList = new IndustryProcess[jsonIndustry.Processes.Length];
@@ -56,7 +72,80 @@ namespace DVIndustry
                     }
                 }
 
-                IndustryConfigs.Add(jsonIndustry.StationId, processList);
+                industryConfigs.Add(jsonIndustry.StationId, processList);
+            }
+
+            // Parse the yard controller configurations
+            foreach( JSONYardConfig jsonYard in config.Yards )
+            {
+                // parse loading tracks at this yard
+                YardTrackInfo[] loadTracks;
+                if( (jsonYard.LoadTracks != null) && (jsonYard.LoadTracks.Count > 0) )
+                {
+                    loadTracks = new YardTrackInfo[jsonYard.LoadTracks.Count];
+                    int i = 0;
+                    foreach( var kvp in jsonYard.LoadTracks )
+                    {
+                        Track track = GetTrack(kvp.Key);
+                        if( track == null )
+                        {
+                            DVIndustry.ModEntry.Logger.Critical($"Failed to find loading track {kvp.Key} at {jsonYard.StationId}");
+                            return false;
+                        }
+
+                        // parse the accepted cargo at this track
+                        ResourceClass acceptedLoads = null;
+                        if( !string.IsNullOrWhiteSpace(kvp.Value) && !kvp.Value.Equals("Any", StringComparison.CurrentCultureIgnoreCase) )
+                        {
+                            // has a cargo filter set
+
+                            // this was gonna be for allowing union of multiple classes. Idk if worth it
+                            //string[] classNames = kvp.Value.Split('|');
+                            //var classes = new ResourceClass[classNames.Length];
+                            //for( int j = 0; j < classNames.Length; i++ )
+                            //{
+                            //    if( !ResourceClass.TryParse(classNames[j], out classes[j]) )
+                            //    {
+                            //        DVIndustry.ModEntry.Logger.Critical($"Invalid resource filter on track {track.ID} at {jsonYard.StationId}");
+                            //        return false;
+                            //    }
+                            //}
+
+                            if( !ResourceClass.TryParse(kvp.Value, out acceptedLoads) )
+                            {
+                                DVIndustry.ModEntry.Logger.Critical($"Invalid resource class filter on track {track.ID} at {jsonYard.StationId}");
+                                return false;
+                            }
+                        }
+
+                        loadTracks[i] = new YardTrackInfo(track, acceptedLoads);
+                        i++;
+                    }
+                }
+                else loadTracks = new YardTrackInfo[0];
+
+                yardLoadingTracks[jsonYard.StationId] = loadTracks;
+
+                // parse staging tracks
+                YardTrackInfo[] stageTracks;
+                if( (jsonYard.StagingTracks != null) && (jsonYard.StagingTracks.Length > 0) )
+                {
+                    stageTracks = new YardTrackInfo[jsonYard.StagingTracks.Length];
+                    for( int i = 0; i < stageTracks.Length; i++ )
+                    {
+                        Track track = GetTrack(jsonYard.StagingTracks[i]);
+                        if( track == null )
+                        {
+                            DVIndustry.ModEntry.Logger.Critical($"Failed to find staging track {jsonYard.StagingTracks[i]} for {jsonYard.StationId}");
+                            return false;
+                        }
+
+                        stageTracks[i] = new YardTrackInfo(track);
+                    }
+                }
+                else stageTracks = new YardTrackInfo[0];
+
+                yardStagingTracks[jsonYard.StationId] = stageTracks;
             }
 
             return true;
@@ -103,24 +192,41 @@ namespace DVIndustry
             return true;
         }
 
-
-        private class JSONIndustryConfigList
+        private static Track GetTrack( string trackId )
         {
-            public JSONIndustryConfig[] Industries;
+            if( SingletonBehaviour<YardTracksOrganizer>.Instance.yardTrackIdToTrack.TryGetValue(trackId, out Track track) )
+            {
+                return track;
+            }
+            return null;
         }
 
-        private class JSONIndustryConfig
+
+        public class JSONIndustryConfigList
+        {
+            public JSONIndustryConfig[] Industries;
+            public JSONYardConfig[] Yards;
+        }
+
+        public class JSONIndustryConfig
         {
             public string StationId;
             public JSONIndustryProcess[] Processes;
         }
 
-        private class JSONIndustryProcess
+        public class JSONIndustryProcess
         {
             public float Time;
 
             public Dictionary<string, float> Inputs;
             public Dictionary<string, float> Outputs;
+        }
+
+        public class JSONYardConfig
+        {
+            public string StationId;
+            public Dictionary<string, string> LoadTracks;
+            public string[] StagingTracks;
         }
     }
 }

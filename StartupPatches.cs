@@ -21,11 +21,20 @@ namespace DVIndustry
                 var processes = IndustryConfigManager.GetProcesses(yardId);
                 if( processes == null ) return;
 
+                var loadTracks = IndustryConfigManager.GetLoadingTracks(yardId);
+                var stageTracks = IndustryConfigManager.GetStagingTracks(yardId);
+                if( loadTracks == null || stageTracks == null )
+                {
+                    DVIndustry.ModEntry.Logger.Error($"Industry configured, but missing yard config at {yardId}");
+                    return;
+                }
+
                 newIndustry = __instance.gameObject.AddComponent<IndustryController>();
                 newIndustry.Initialize(processes);
                 DVIndustry.ModEntry.Logger.Log($"Added industry controller to {yardId}");
 
                 var loadController = __instance.gameObject.AddComponent<YardController>();
+                loadController.Initialize(loadTracks, stageTracks);
                 DVIndustry.ModEntry.Logger.Log($"Added yard load/unload controller to {yardId}");
             }
         }

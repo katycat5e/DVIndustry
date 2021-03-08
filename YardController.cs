@@ -8,19 +8,42 @@ using DV.Logic.Job;
 
 namespace DVIndustry
 {
+    public class YardTrackInfo
+    {
+        public readonly Track Track;
+        public readonly ResourceClass LoadingClass;
+        public YardConsistState CurrentUse = YardConsistState.None;
+
+        public double AvailableSpace => Track.length - Track.OccupiedLength;
+
+        public YardTrackInfo( Track track, ResourceClass loadResource = null )
+        {
+            Track = track;
+            LoadingClass = loadResource;
+        }
+    }
+
     public class YardController : ControllerBase<YardController, YardControllerSaveData>
     {
         private const float LOAD_UNLOAD_DELAY = 10f;
         private const float CAR_STOPPED_EPSILON = 0.2f;
 
-        public IndustryController AttachedIndustry = null;
+        public bool InAutoMode = false;
 
-        private readonly Queue<List<TrainCar>> incomingConsistQueue = new Queue<List<TrainCar>>();
-        private List<TrainCar> currentUnloadConsist = null;
-        private int currentUnloadIdx = 0;
+        private IndustryController AttachedIndustry = null;
+
+        private readonly List<YardControlConsist> consistList = new List<YardControlConsist>();
+        private YardTrackInfo[] LoadingTracks;
+        private YardTrackInfo[] StagingTracks;
 
         private float lastUnloadTime = 0f;
 
+
+        public void Initialize( YardTrackInfo[] loadTracks, YardTrackInfo[] stagingTracks )
+        {
+            LoadingTracks = loadTracks;
+            StagingTracks = stagingTracks;
+        }
 
         void OnEnable()
         {
@@ -32,36 +55,73 @@ namespace DVIndustry
 
         void Update()
         {
-            if( (currentUnloadConsist == null) || (currentUnloadIdx >= currentUnloadConsist.Count) )
-            {
-                if( !incomingConsistQueue.TryDequeue(out currentUnloadConsist) )
-                {
-                    currentUnloadConsist = null;
-                }
-                currentUnloadIdx = 0;
-            }
-
             float curTime = Time.time;
-            if( (currentUnloadConsist != null) && ((curTime - lastUnloadTime) >= LOAD_UNLOAD_DELAY) )
+
+            // check if any consists are done
+
+            if( (curTime - lastUnloadTime) >= LOAD_UNLOAD_DELAY )
             {
-                // Unload a single car from the current consist
+                // Transfer load on a car from each loading/unloading consist
                 lastUnloadTime = curTime;
 
-                TrainCar curCar = currentUnloadConsist[currentUnloadIdx];
-                if( Math.Abs(curCar.GetForwardSpeed()) < CAR_STOPPED_EPSILON )
+                foreach( YardControlConsist consist in consistList )
                 {
-                    // car is stationary, let us proceed...
-                    Car lCar = curCar.logicCar;
-                    CargoType loadedType = lCar.CurrentCargoTypeInCar;
-                    float loadedAmount = lCar.LoadedCargoAmount;
+                    switch( consist.State )
+                    {
+                        case YardConsistState.Loading:
+                            LoadOneCar(consist);
+                            break;
 
-                    DVIndustry.ModEntry.Logger.Log($"Unloading {loadedAmount} of {loadedType} from {lCar.ID}");
+                        case YardConsistState.Unloading:
+                            UnloadOneCar(consist);
+                            break;
 
-                    lCar.UnloadCargo(loadedAmount, loadedType);
-                    AttachedIndustry.StoreInputCargo(loadedType, loadedAmount);
-                    currentUnloadIdx += 1; // move to next car in consist
+                        default:
+                            break;
+                    }
                 }
             }
+        }
+
+        private static bool CarIsStationary( TrainCar car ) => Math.Abs(car.GetForwardSpeed()) < CAR_STOPPED_EPSILON;
+        
+        private void LoadOneCar( YardControlConsist consist )
+        {
+            TrainCar car = consist.FirstOrDefault(c => c.LoadedCargoAmount < 1f);
+            if( car == null )
+            {
+                consist.State = YardConsistState.Full;
+                return;
+            }
+
+            if( !CarIsStationary(car) ) return;
+
+            CargoType toLoad = consist.LoadResource.GetCargoForCar(car.carType);
+            car.logicCar.LoadCargo(1f, toLoad);
+
+#if DEBUG
+            DVIndustry.ModEntry.Logger.Log($"{StationId} - Loaded {toLoad} to {car.ID}");
+#endif
+        }
+
+        private void UnloadOneCar( YardControlConsist consist )
+        {
+            TrainCar car = consist.FirstOrDefault(c => c.LoadedCargoAmount > 0f);
+            if( car == null )
+            {
+                consist.State = YardConsistState.Empty;
+                return;
+            }
+
+            if( !CarIsStationary(car) ) return;
+
+            CargoType toUnload = car.LoadedCargo;
+            car.logicCar.UnloadCargo(car.LoadedCargoAmount, toUnload);
+            AttachedIndustry.StoreInputCargo(toUnload, 1f);
+
+#if DEBUG
+            DVIndustry.ModEntry.Logger.Log($"{StationId} - Unloaded {toUnload} from {car.ID}");
+#endif
         }
 
         public void SaveCarStates()
@@ -72,57 +132,58 @@ namespace DVIndustry
         // ControllerBase interface
         public override YardControllerSaveData GetSaveData()
         {
-            List<TrainCar>[] consists = incomingConsistQueue.ToArray();
+            return null;
+            //List<TrainCar>[] consists = consistList.ToArray();
 
-            string[][] waitingCarGuids = new string[consists.Length][];
-            for( int i = 0; i < consists.Length; i++ )
-            {
-                waitingCarGuids[i] = consists[i].Select(car => car.CarGUID).ToArray();
-            }
+            //string[][] waitingCarGuids = new string[consists.Length][];
+            //for( int i = 0; i < consists.Length; i++ )
+            //{
+            //    waitingCarGuids[i] = consists[i].Select(car => car.CarGUID).ToArray();
+            //}
 
-            return new YardControllerSaveData()
-            {
-                StationId = StationId,
-                IncomingCars = waitingCarGuids,
-                CurrentUnloadCars = currentUnloadConsist.Select(car => car.CarGUID).ToArray(),
-                CurrentUnloadIdx = currentUnloadIdx
-            };
+            //return new YardControllerSaveData()
+            //{
+            //    StationId = StationId,
+            //    IncomingCars = waitingCarGuids,
+            //    CurrentUnloadCars = currentUnloadConsist.Select(car => car.CarGUID).ToArray(),
+            //    CurrentUnloadIdx = currentUnloadIdx
+            //};
         }
 
         public override void ApplySaveData( YardControllerSaveData data )
         {
-            foreach( string[] consistIds in data.IncomingCars )
-            {
-                List<TrainCar> parsedCars = Utilities.GetTrainCarsFromCarGuids(consistIds);
-                if( parsedCars != null )
-                {
-                    incomingConsistQueue.Enqueue(parsedCars);
-                }
-                else
-                {
-                    DVIndustry.ModEntry.Logger.Warning($"Couldn't find incoming consist for yard controller at {StationId}");
-                }
-            }
+            //foreach( string[] consistIds in data.IncomingCars )
+            //{
+            //    List<TrainCar> parsedCars = Utilities.GetTrainCarsFromCarGuids(consistIds);
+            //    if( parsedCars != null )
+            //    {
+            //        consistList.Enqueue(parsedCars);
+            //    }
+            //    else
+            //    {
+            //        DVIndustry.ModEntry.Logger.Warning($"Couldn't find incoming consist for yard controller at {StationId}");
+            //    }
+            //}
 
-            if( (data.CurrentUnloadCars != null) && (data.CurrentUnloadCars.Length > 0) )
-            {
-                currentUnloadConsist = Utilities.GetTrainCarsFromCarGuids(data.CurrentUnloadCars);
-                if( currentUnloadConsist != null )
-                {
-                    currentUnloadIdx = data.CurrentUnloadIdx;
-                }
-                else
-                {
-                    DVIndustry.ModEntry.Logger.Warning($"Couldn't find unloading consist for yard controller at {StationId}");
-                    currentUnloadConsist = null;
-                    currentUnloadIdx = 0;
-                }
-            }
-            else
-            {
-                currentUnloadConsist = null;
-                currentUnloadIdx = 0;
-            }
+            //if( (data.CurrentUnloadCars != null) && (data.CurrentUnloadCars.Length > 0) )
+            //{
+            //    currentUnloadConsist = Utilities.GetTrainCarsFromCarGuids(data.CurrentUnloadCars);
+            //    if( currentUnloadConsist != null )
+            //    {
+            //        currentUnloadIdx = data.CurrentUnloadIdx;
+            //    }
+            //    else
+            //    {
+            //        DVIndustry.ModEntry.Logger.Warning($"Couldn't find unloading consist for yard controller at {StationId}");
+            //        currentUnloadConsist = null;
+            //        currentUnloadIdx = 0;
+            //    }
+            //}
+            //else
+            //{
+            //    currentUnloadConsist = null;
+            //    currentUnloadIdx = 0;
+            //}
         }
     }
 }

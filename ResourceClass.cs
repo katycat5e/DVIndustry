@@ -10,6 +10,8 @@ namespace DVIndustry
 {
     public class ResourceClass
     {
+        private static readonly Random rand = new Random();
+
         public readonly string ID;
         public readonly CargoType[] Cargos;
 
@@ -35,6 +37,22 @@ namespace DVIndustry
         public bool ContainsCargo( CargoType cargo )
         {
             return Cargos.Contains(cargo);
+        }
+
+        public CargoType GetCargoForCar( TrainCarType carType )
+        {
+            if( Cargos.Length == 1 )
+            {
+                if( CargoTypes.CanCarContainCargoType(carType, Cargos[0]) ) return Cargos[0];
+                else return CargoType.None;
+            }
+
+            CargoType[] possibleTypes = Cargos.Where(cargo => CargoTypes.CanCarContainCargoType(carType, cargo)).ToArray();
+            if( possibleTypes.Length > 0 )
+            {
+                return possibleTypes.ChooseOne(rand);
+            }
+            else return CargoType.None;
         }
 
         public override bool Equals( object obj )

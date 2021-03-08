@@ -40,6 +40,9 @@
     <Reference Include="Newtonsoft.Json">
       <HintPath>dv\DerailValley_Data\Managed\Newtonsoft.Json.dll</HintPath>
     </Reference>
+    <Reference Include="DV.Utils">
+      <HintPath>dv\DerailValley_Data\Managed\DV.Utils.dll</HintPath>
+    </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
     <Reference Include="System.Xml.Linq" />
@@ -60,12 +63,14 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="ControllerBase.cs" />
+    <Compile Include="Extensions.cs" />
     <Compile Include="IndustryConfigManager.cs" />
     <Compile Include="IndustryResource.cs" />
     <Compile Include="IndustrySaveDataCollection.cs" />
     <Compile Include="IndustrySaveDataManager.cs" />
     <Compile Include="Patch_StationController.cs" />
     <Compile Include="ShipmentOrganizer.cs" />
+    <Compile Include="YardControlConsist.cs" />
     <Compile Include="Utilities.cs" />
     <Compile Include="ResourceClass.cs" />
     <Compile Include="DVIndustry.cs" />

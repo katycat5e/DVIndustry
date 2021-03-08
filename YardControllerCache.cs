@@ -9,25 +9,34 @@ namespace DVIndustry
 {
     internal class YardControllerCache
     {
-        public List<YardControlCarData> EmptyPool;
-        public List<YardControlConsistData> UnloadConsists;
-        public List<YardControlConsistData> LoadConsists;
+        public float LastXferTime;
+        public float LastShuntTime;
+
+        public List<YCC_CarData> EmptyPool;
+        public List<YCC_ConsistData> UnloadConsists;
+        public List<YCC_ConsistData> LoadConsists;
+
+        public void ResetTimers()
+        {
+            LastXferTime = LastShuntTime = UnityEngine.Time.time;
+        }
 
         // TODO: flesh this out, add logic for auto-shunting
     }
 
-    internal class YardControlConsistData
+    internal class YCC_ConsistData
     {
+        public YardConsistState State;
         public int NLoaded;
-        public readonly List<YardControlCarData> Cars = new List<YardControlCarData>();
+        public readonly List<YCC_CarData> Cars = new List<YCC_CarData>();
     }
 
-    internal class YardControlCarData
+    internal class YCC_CarData
     {
         public readonly TrainCarType CarType;
         public CargoType LoadedCargo;
 
-        public YardControlCarData( TrainCarType carType, CargoType load )
+        public YCC_CarData( TrainCarType carType, CargoType load )
         {
             CarType = carType;
             LoadedCargo = load;
