@@ -28,7 +28,9 @@ namespace DVIndustry
         private const float LOAD_UNLOAD_DELAY = 10f;
         private const float CAR_STOPPED_EPSILON = 0.2f;
 
-        public bool InAutoMode = false;
+        public bool InForegroundMode { get; private set; } = false;
+        private bool playerInRange = false;
+        private bool playerWasInRange = false;
 
         private IndustryController AttachedIndustry = null;
 
@@ -37,6 +39,7 @@ namespace DVIndustry
         private YardTrackInfo[] stagingTracks;
 
         private HashSet<Track> loadTrackSet;
+        private bool IsOnLoadingTrack( YardControlConsist consist ) => loadTrackSet.Contains(consist.Track);
 
         private float lastUnloadTime = 0f;
 
@@ -61,32 +64,70 @@ namespace DVIndustry
             // wait for loading to finish
             if( !IndustrySaveDataManager.IsLoadCompleted ) return;
 
+            // check for player presence
+            float playerDistance = StationRange.PlayerSqrDistanceFromStationCenter;
+            bool playerTookJob = AttachedStation.logicStation.takenJobs.Count > 0;
+            playerInRange = !StationRange.IsPlayerOutOfJobDestroyZone(playerDistance, playerTookJob);
+
+            if( playerInRange && !playerWasInRange )
+            {
+                // just entered
+                SwitchToForegroundMode();
+            }
+            else if( !playerInRange && playerWasInRange )
+            {
+                // just left
+                SwitchToBackgroundMode();
+            }
+            else if( playerInRange )
+            {
+                // normal in-range processing
+                ForegroundUpdate();
+            }
+            else
+            {
+                // not in range
+                BackgroundUpdate();
+            }
+
+            playerWasInRange = playerInRange;
+        }
+
+        private void ForegroundUpdate()
+        {
             float curTime = Time.time;
 
-            // check if any consists are done
-
-            if( (curTime - lastUnloadTime) >= LOAD_UNLOAD_DELAY )
+            foreach( YardControlConsist consist in consistList )
             {
-                // Transfer load on a car from each loading/unloading consist
-                lastUnloadTime = curTime;
-
-                foreach( YardControlConsist consist in consistList )
+                switch( consist.State )
                 {
-                    switch( consist.State )
-                    {
-                        case YardConsistState.Loading:
+                    case YardConsistState.Empty:
+                        // 
+                        break;
+
+                    case YardConsistState.Loading:
+                        if( (curTime - consist.LastUpdateTime) >= LOAD_UNLOAD_DELAY )
+                        {
                             LoadOneCar(consist);
-                            break;
+                        }
+                        break;
 
-                        case YardConsistState.Unloading:
+                    case YardConsistState.Unloading:
+                        if( (curTime - consist.LastUpdateTime) >= LOAD_UNLOAD_DELAY )
+                        {
                             UnloadOneCar(consist);
-                            break;
+                        }
+                        break;
 
-                        default:
-                            break;
-                    }
+                    default:
+                        break;
                 }
             }
+        }
+
+        private void BackgroundUpdate()
+        {
+
         }
 
         private static bool CarIsStationary( TrainCar car ) => Math.Abs(car.GetForwardSpeed()) < CAR_STOPPED_EPSILON;
@@ -96,7 +137,7 @@ namespace DVIndustry
             TrainCar car = consist.FirstOrDefault(c => c.LoadedCargoAmount < 1f);
             if( car == null )
             {
-                consist.State = YardConsistState.Full;
+                consist.State = YardConsistState.WaitingForTransport;
                 return;
             }
 
@@ -130,9 +171,14 @@ namespace DVIndustry
 #endif
         }
 
-        public void SaveCarStates()
+        private void SwitchToBackgroundMode()
         {
+            InForegroundMode = false;
+        }
 
+        private void SwitchToForegroundMode()
+        {
+            InForegroundMode = true;
         }
 
         // ControllerBase interface

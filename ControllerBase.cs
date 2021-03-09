@@ -10,7 +10,18 @@ namespace DVIndustry
     public abstract class ControllerBase<T, SaveType> : MonoBehaviour
         where T : ControllerBase<T, SaveType>
     {
-        protected StationController AttachedStation = null;
+        private StationController _AttachedStation;
+        protected StationController AttachedStation
+        {
+            get => _AttachedStation;
+            set
+            {
+                _AttachedStation = value;
+                StationRange = value?.GetComponent<StationJobGenerationRange>();
+            }
+        }
+
+        protected StationJobGenerationRange StationRange = null;
 
         public string StationId => AttachedStation?.stationInfo.YardID;
 

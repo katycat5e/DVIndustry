@@ -10,7 +10,7 @@ namespace DVIndustry
     {
         None = 0,
         Empty,
-        Full,
+        WaitingForTransport,
         Loading,
         Unloading,
         WaitingForLoad,
@@ -23,6 +23,7 @@ namespace DVIndustry
         public Track Track;
         public YardConsistState State;
         public ResourceClass LoadResource = null;
+        public float LastUpdateTime = 0;
 
         public CarsPerTrack CarsPerTrack => new CarsPerTrack(Track, Cars.Select(tc => tc.logicCar).ToList());
         public List<Car> LogicCars => Cars.Select(tc => tc.logicCar).ToList();
