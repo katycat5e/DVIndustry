@@ -25,6 +25,10 @@ namespace DVIndustry
         public ResourceClass LoadResource = null;
         public float LastUpdateTime = 0;
 
+        public float Length => 
+            YardTracksOrganizer.Instance.GetTotalTrainCarsLength(Cars) +
+            YardTracksOrganizer.Instance.GetSeparationLengthBetweenCars(Cars.Count);
+
         public CarsPerTrack CarsPerTrack => new CarsPerTrack(Track, Cars.Select(tc => tc.logicCar).ToList());
         public List<Car> LogicCars => Cars.Select(tc => tc.logicCar).ToList();
 

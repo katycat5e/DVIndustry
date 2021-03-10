@@ -41,7 +41,7 @@ namespace DVIndustry
         private HashSet<Track> loadTrackSet;
         private bool IsOnLoadingTrack( YardControlConsist consist ) => loadTrackSet.Contains(consist.Track);
 
-        private float lastUnloadTime = 0f;
+        private ProductRequestCollection[] outputsDemand = null;
 
 
         public void Initialize( YardTrackInfo[] loadTracks, YardTrackInfo[] stageTracks )
@@ -63,6 +63,20 @@ namespace DVIndustry
         {
             // wait for loading to finish
             if( !IndustrySaveDataManager.IsLoadCompleted ) return;
+
+            // check if demand cache needs initialized
+            if( outputsDemand == null )
+            {
+                outputsDemand = AttachedIndustry.OutputResources
+                    .Select(resName => new ProductRequestCollection(ResourceClass.Parse(resName)))
+                    .ToArray();
+            }
+
+            // refresh the demand
+            foreach( ProductRequestCollection requestCollection in outputsDemand )
+            {
+                ShipmentOrganizer.UpdateProductDemand(requestCollection);
+            }
 
             // check for player presence
             float playerDistance = StationRange.PlayerSqrDistanceFromStationCenter;

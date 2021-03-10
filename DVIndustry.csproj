@@ -79,6 +79,7 @@
     <Compile Include="StartupPatches.cs" />
     <Compile Include="YardController.cs" />
     <Compile Include="YardControllerCache.cs" />
+    <Compile Include="YardUtil.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup Condition=" '$MSBuildRuntimeType' != 'Mono' ">

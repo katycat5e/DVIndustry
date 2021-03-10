@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using DV.Logic.Job;
+using System.Collections;
 
 namespace DVIndustry
 {
@@ -39,8 +40,8 @@ namespace DVIndustry
         private static readonly Dictionary<string, List<IndustryYardPair>> acceptingIndustries =
             new Dictionary<string, List<IndustryYardPair>>();
 
-        private static readonly Dictionary<string, LinkedList<ShipmentData>> pendingShipments =
-            new Dictionary<string, LinkedList<ShipmentData>>();
+        private static readonly Dictionary<string, FancyLinkedList<ShipmentData>> pendingShipments =
+            new Dictionary<string, FancyLinkedList<ShipmentData>>();
 
         public static void RegisterStation( IndustryController industry, YardController yard )
         {
@@ -59,7 +60,7 @@ namespace DVIndustry
             }
 
             // add station to the pending shipments dict
-            pendingShipments[industry.StationId] = new LinkedList<ShipmentData>();
+            pendingShipments[industry.StationId] = new FancyLinkedList<ShipmentData>();
         }
 
         public static void OnShipmentCreated( Job job, ResourceClass resource, int nCars )
@@ -70,21 +71,30 @@ namespace DVIndustry
             pendingShipments[destYard].AddLast(shipment);
         }
 
-        public static List<ProductRequest> GetDemandForProduct( string resourceKey )
+        public static void OnShipmentEnded( Job job )
+        {
+            string destYard = job.chainData.chainDestinationYardId;
+
+            if( pendingShipments.TryGetValue(destYard, out var shipmentList) )
+            {
+                shipmentList.RemoveFirstWhere(s => s.Job == job);
+            }
+        }
+
+        private static IEnumerable<ProductRequest> GetRequests( string key )
         {
             // Get industries where demand for product
-            if( acceptingIndustries.TryGetValue(resourceKey, out List<IndustryYardPair> sinks) )
+            if( acceptingIndustries.TryGetValue(key, out List<IndustryYardPair> sinks) )
             {
-                var waybills = new List<ProductRequest>();
                 foreach( IndustryYardPair station in sinks )
                 {
                     // get demand, subtract active/pending shipments
-                    int demand = station.Industry.GetDemand(resourceKey);
+                    int demand = station.Industry.GetDemand(key);
                     if( pendingShipments.TryGetValue(station.ID, out var shipments) && (shipments.Count > 0) )
                     {
                         foreach( ShipmentData shipment in shipments )
                         {
-                            if( resourceKey == shipment.Resource.ID )
+                            if( key == shipment.Resource.ID )
                             {
                                 demand -= shipment.Amount;
                             }
@@ -93,14 +103,29 @@ namespace DVIndustry
 
                     if( demand > 0 )
                     {
-                        waybills.Add(new ProductRequest(resourceKey, station.ID, demand));
+                        yield return new ProductRequest(key, station.ID, demand);
                     }
                 }
-
-                return waybills;
             }
 
-            return null;
+            yield break;
+        }
+
+        public static void UpdateProductDemand( ProductRequestCollection requestCollection )
+        {
+            requestCollection.Requests.Clear();
+            requestCollection.Requests.AddRange(GetRequests(requestCollection.Resource.Key));
+        }
+    }
+
+    public class ProductRequestCollection
+    {
+        public readonly ResourceClass Resource;
+        public readonly List<ProductRequest> Requests = new List<ProductRequest>();
+
+        public ProductRequestCollection( ResourceClass resource )
+        {
+            Resource = resource;
         }
     }
 
