@@ -68,4 +68,12 @@
     <Compile Include="StartupPatches.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <PropertyGroup Condition=" '$MSBuildRuntimeType' != 'Mono' ">
+    <PostBuildEvent>if not exist "$(ProjectDir)dv\Mods\$(ProjectName)" mkdir "$(ProjectDir)dv\Mods\$(ProjectName)"
+copy $(TargetPath) "$(ProjectDir)dv\Mods\$(ProjectName)\"
+copy $(ProjectDir)Info.json "$(ProjectDir)dv\Mods\$(ProjectName)\"
+if $(Configuration) == Release (
+  powershell Compress-Archive -DestinationPath '$(ProjectDir)$(ProjectName).zip' -Path '"$(ProjectDir)dv\Mods\$(ProjectName)\' -Force
+)</PostBuildEvent>
+  </PropertyGroup>
 </Project>
