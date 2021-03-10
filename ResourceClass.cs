@@ -10,7 +10,64 @@ namespace DVIndustry
 {
     public class ResourceClass
     {
+        #region Static Members
+
+        public static readonly Dictionary<string, ResourceClass> BuiltinClasses = new Dictionary<string, ResourceClass>();
+
         private static readonly Random rand = new Random();
+        private static readonly Dictionary<CargoType, ResourceClass> singleResourceClassMap =
+            new Dictionary<CargoType, ResourceClass>();
+
+        static ResourceClass()
+        {
+            // get all public ResourceClass Fields
+            var builtinClassFields = typeof(ResourceClass).GetFields(BindingFlags.Public | BindingFlags.Static)
+                .Where(f => f.FieldType.Equals(typeof(ResourceClass)));
+
+            foreach( FieldInfo field in builtinClassFields )
+            {
+                ResourceClass resource = field.GetValue(null) as ResourceClass;
+                BuiltinClasses[resource.ID] = resource;
+            }
+        }
+
+        public static ResourceClass SingleCargoClass( CargoType singleType )
+        {
+            if( singleResourceClassMap.TryGetValue(singleType, out var resource) )
+            {
+                return resource;
+            }
+            else
+            {
+                resource = new ResourceClass(singleType);
+                singleResourceClassMap[singleType] = resource;
+                return resource;
+            }
+        }
+
+        public static ResourceClass Parse( string id )
+        {
+            if( TryParse(id, out ResourceClass parsed) ) return parsed;
+            else return null;
+        }
+
+        public static bool TryParse( string id, out ResourceClass resource )
+        {
+            if( BuiltinClasses.TryGetValue(id, out resource) )
+            {
+                return true;
+            }
+            else if( Enum.TryParse(id, out CargoType cargo) )
+            {
+                resource = SingleCargoClass(cargo);
+                return true;
+            }
+            return false;
+        }
+
+        #endregion
+        //============================================================================================
+        #region Instance Members
 
         public readonly string ID;
         public readonly CargoType[] Cargos;
@@ -75,25 +132,9 @@ namespace DVIndustry
             return $"[ResourceClass: {ID}]";
         }
 
-        // End Instance Members
-        // Static Members:
-
-        private static readonly Dictionary<CargoType, ResourceClass> singleResourceClassMap =
-            new Dictionary<CargoType, ResourceClass>();
-
-        public static ResourceClass SingleCargoClass( CargoType singleType )
-        {
-            if( singleResourceClassMap.TryGetValue(singleType, out var resource) )
-            {
-                return resource;
-            }
-            else
-            {
-                resource = new ResourceClass(singleType);
-                singleResourceClassMap[singleType] = resource;
-                return resource;
-            }
-        }
+        #endregion
+        //============================================================================================
+        #region Predefined ResourceClasses
 
         public static readonly ResourceClass AgProducts = new ResourceClass(
             "AgProducts",
@@ -214,34 +255,6 @@ namespace DVIndustry
             RefinedPetrol
         );
 
-
-        public static readonly Dictionary<string, ResourceClass> BuiltinClasses = new Dictionary<string, ResourceClass>();
-
-        static ResourceClass()
-        {
-            // get all public ResourceClass Fields
-            var builtinClassFields = typeof(ResourceClass).GetFields(BindingFlags.Public|BindingFlags.Static)
-                .Where(f => f.FieldType.Equals(typeof(ResourceClass)));
-
-            foreach( FieldInfo field in builtinClassFields )
-            {
-                ResourceClass resource = field.GetValue(null) as ResourceClass;
-                BuiltinClasses[resource.ID] = resource;
-            }
-        }
-
-        public static bool TryParse( string id, out ResourceClass resource )
-        {
-            if( BuiltinClasses.TryGetValue(id, out resource) )
-            {
-                return true;
-            }
-            else if( Enum.TryParse(id, out CargoType cargo) )
-            {
-                resource = SingleCargoClass(cargo);
-                return true;
-            }
-            return false;
-        }
+        #endregion
     }
 }
