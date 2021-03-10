@@ -1,0 +1,9 @@
+{
+    "Id": "DVIndustry",
+    "DisplayName": "DVIndustry",
+    "Author": "katycat5e",
+    "Version": "0.0.0",
+    "AssemblyName": "DVInudstry.dll",
+    "EntryMethod": "DVIndustry.DVInudstry.Load",
+    "Repository": "https://raw.githubusercontent.com/katycat5e/DVIndustry/main/Repository.json"
+}

@@ -5,6 +5,14 @@ VisualStudioVersion = 16.0.30907.101
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DVIndustry", "DVIndustry.csproj", "{16E14814-E421-4E23-A45C-1A731EE0B9D7}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{7A680DD3-B6F2-4E7C-8E1B-5553185E5B3D}"
+	ProjectSection(SolutionItems) = preProject
+		.gitignore = .gitignore
+		Info.json = Info.json
+		README.md = README.md
+		Repository.json = Repository.json
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
