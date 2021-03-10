@@ -184,6 +184,15 @@ namespace DVIndustry
             }
         );
 
+        public static readonly ResourceClass RefinedPetrol = new ResourceClass(
+            "RefinedPetrol",
+            new CargoType[]
+            {
+                CargoType.Diesel,
+                CargoType.Gasoline
+            }
+        );
+
         public static readonly ResourceClass ConsumerGoods = new ResourceClass(
             "ConsumerGoods",
             new CargoType[]
@@ -192,8 +201,6 @@ namespace DVIndustry
                 CargoType.NewCars,
                 CargoType.CannedFood,
                 CargoType.CatFood,
-                CargoType.Diesel,
-                CargoType.Gasoline,
                 CargoType.Medicine,
                 CargoType.ImportedNewCars,
                 CargoType.ChemicalsIskar,
@@ -203,22 +210,12 @@ namespace DVIndustry
             FreshFood,
             Electronics,
             Tooling,
-            Clothing
+            Clothing,
+            RefinedPetrol
         );
 
 
         public static readonly Dictionary<string, ResourceClass> BuiltinClasses = new Dictionary<string, ResourceClass>();
-        //{
-        //    { AgProducts.ID, AgProducts },
-        //    { FreshFood.ID, FreshFood },
-        //    { Steel.ID, Steel },
-        //    { Lumber.ID, Lumber },
-        //    { NewVehicles.ID, NewVehicles },
-        //    { Electronics.ID, Electronics },
-        //    { Tooling.ID, Tooling },
-        //    { Clothing.ID, Clothing },
-        //    { ConsumerGoods.ID, ConsumerGoods }
-        //};
 
         static ResourceClass()
         {
