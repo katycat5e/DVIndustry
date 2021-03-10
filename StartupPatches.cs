@@ -36,6 +36,8 @@ namespace DVIndustry
                 var loadController = __instance.gameObject.AddComponent<YardController>();
                 loadController.Initialize(loadTracks, stageTracks);
                 DVIndustry.ModEntry.Logger.Log($"Added yard load/unload controller to {yardId}");
+
+                ShipmentOrganizer.RegisterStation(newIndustry, loadController);
             }
         }
     }

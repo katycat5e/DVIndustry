@@ -1,88 +1,116 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using UnityEngine;
+using DV.Logic.Job;
 
 namespace DVIndustry
 {
-    public class ShipmentOrganizer
+    public static class ShipmentOrganizer
     {
-        public Waybill[] CreateWaybills( string resourceKey, int carsToAssign )
+        class IndustryYardPair
         {
-            // from Industries select (id, demand) where (demand > 1)
-            List<Tuple<string, float>> demandVector = IndustryController.AllControllers
-                .Select(cont => new Tuple<string, float>(cont.StationId, Mathf.Floor(cont.GetDemand(resourceKey))))
-                .Where(tup => tup.Item2 > 1f)
-                .ToList();
+            public readonly IndustryController Industry;
+            public readonly YardController Yard;
 
-            bool validDivision = false;
-            while( !validDivision && (demandVector.Count > 1) )
+            public string ID => Industry.StationId;
+
+            public IndustryYardPair( IndustryController industry, YardController yard )
             {
-                float totalDemand = demandVector.Sum(tup => tup.Item2);
-                float scale = (carsToAssign > totalDemand) ? 1f : carsToAssign / totalDemand;
+                Industry = industry;
+                Yard = yard;
+            }
+        }
 
-                validDivision = true;
-                int minIdx = -1;
-                float minDemand = float.PositiveInfinity;
+        class ShipmentData
+        {
+            public Job Job;
+            public ResourceClass Resource;
+            public int Amount;
 
-                for( int i = 0; i < demandVector.Count; i++ )
+            public ShipmentData( Job job, ResourceClass resource, int amount )
+            {
+                Job = job;
+                Resource = resource;
+                Amount = amount;
+            }
+        }
+
+        private static readonly Dictionary<string, List<IndustryYardPair>> acceptingIndustries =
+            new Dictionary<string, List<IndustryYardPair>>();
+
+        private static readonly Dictionary<string, LinkedList<ShipmentData>> pendingShipments =
+            new Dictionary<string, LinkedList<ShipmentData>>();
+
+        public static void RegisterStation( IndustryController industry, YardController yard )
+        {
+            var pair = new IndustryYardPair(industry, yard);
+
+            // add ref to this station under each resource it accepts
+            foreach( string resource in industry.InputResources )
+            {
+                if( !acceptingIndustries.TryGetValue(resource, out List<IndustryYardPair> destList) )
                 {
-                    float scaledDemand = demandVector[i].Item2 * scale;
-
-                    if( scaledDemand < minDemand )
-                    {
-                        minIdx = i;
-                        minDemand = scaledDemand;
-                    }
-
-                    // we can't accept a division of cars with less than a carload going to a destination
-                    if( scaledDemand < 1f )
-                    {
-                        validDivision = false;
-                    }
+                    destList = new List<IndustryYardPair>();
+                    acceptingIndustries[resource] = destList;
                 }
 
-                // if bad division, remove the smallest demand and try again
-                if( !validDivision )
-                {
-                    demandVector.RemoveAt(minIdx);
-                }
+                destList.Add(pair);
             }
 
-            // whew okay so we created a valid division somehow, even if it's all just one destination
-            Waybill[] output = new Waybill[demandVector.Count];
-            int totalAssigned = 0;
+            // add station to the pending shipments dict
+            pendingShipments[industry.StationId] = new LinkedList<ShipmentData>();
+        }
 
-            // create the waybills for each destination
-            for( int i = 0; i < demandVector.Count; i++ )
+        public static void OnShipmentCreated( Job job, ResourceClass resource, int nCars )
+        {
+            var shipment = new ShipmentData(job, resource, nCars);
+            string destYard = job.chainData.chainDestinationYardId;
+
+            pendingShipments[destYard].AddLast(shipment);
+        }
+
+        public static List<ProductRequest> GetDemandForProduct( string resourceKey )
+        {
+            // Get industries where demand for product
+            if( acceptingIndustries.TryGetValue(resourceKey, out List<IndustryYardPair> sinks) )
             {
-                int assignedCars;
-                if( i < demandVector.Count - 1 )
+                var waybills = new List<ProductRequest>();
+                foreach( IndustryYardPair station in sinks )
                 {
-                    assignedCars = Mathf.RoundToInt(demandVector[i].Item2);
-                }
-                else
-                {
-                    // last destination gets any bonus leftover after rounding (make sure all are used)
-                    assignedCars = carsToAssign - totalAssigned;
+                    // get demand, subtract active/pending shipments
+                    int demand = station.Industry.GetDemand(resourceKey);
+                    if( pendingShipments.TryGetValue(station.ID, out var shipments) && (shipments.Count > 0) )
+                    {
+                        foreach( ShipmentData shipment in shipments )
+                        {
+                            if( resourceKey == shipment.Resource.ID )
+                            {
+                                demand -= shipment.Amount;
+                            }
+                        }
+                    }
+
+                    if( demand > 0 )
+                    {
+                        waybills.Add(new ProductRequest(resourceKey, station.ID, demand));
+                    }
                 }
 
-                output[i] = new Waybill(resourceKey, demandVector[i].Item1, assignedCars);
+                return waybills;
             }
 
-            return output;
+            return null;
         }
     }
 
-    public class Waybill
+    public class ProductRequest
     {
         public string ResourceKey;
         public string DestYard;
         public int CarCount;
 
-        public Waybill( string resource, string dest, int nCars )
+        public ProductRequest( string resource, string dest, int nCars )
         {
             ResourceKey = resource;
             DestYard = dest;

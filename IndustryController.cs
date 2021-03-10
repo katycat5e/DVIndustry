@@ -28,7 +28,9 @@ namespace DVIndustry
 
         protected Dictionary<string, float> resourceRates = new Dictionary<string, float>();
 
-        public IEnumerable<IndustryResource> AllResources => stockpileMap.Values;
+        public IEnumerable<string> InputResources => inputStockpile.Select(r => r.Key);
+        public IEnumerable<string> OutputResources => outputStockpile.Select(r => r.Key);
+        public IEnumerable<string> AllResources => stockpileMap.Keys;
 
         protected bool waitingForLoadComplete = true;
 
@@ -114,7 +116,7 @@ namespace DVIndustry
             DVIndustry.ModEntry.Logger.Warning($"Tried to store a resource ({resource.AcceptedItems.ID}) that this industry doesn't use");
         }
 
-        public float GetDemand( string resourceKey )
+        public int GetDemand( string resourceKey )
         {
             if( resourceRates.TryGetValue(resourceKey, out float consumeRate) )
             {
@@ -123,7 +125,7 @@ namespace DVIndustry
                 // logistic curve for demand based on lack of resource (lower stock -> higher demand)
                 double amt40min = consumeRate * 2400;
                 double exponent = -(10f / amt40min) * (curAmount - (amt40min / 2));
-                return (float)(amt40min * 1.2d * (1 - 1 / (1 + Math.Exp(exponent))));
+                return Mathd.FloorToInt(amt40min * 1.2d * (1 - 1 / (1 + Math.Exp(exponent))));
             }
 
             return 0;
@@ -188,7 +190,7 @@ namespace DVIndustry
 
         public override IndustrySaveData GetSaveData()
         {
-            return new IndustrySaveData(StationId, AllResources);
+            return new IndustrySaveData(StationId, stockpileMap.Values);
         }
 
         private static IEnumerator<IndustryResource> ProcessStockpiles( IndustrySaveData industryData )
