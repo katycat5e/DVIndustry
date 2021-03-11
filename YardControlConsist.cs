@@ -20,16 +20,33 @@ namespace DVIndustry
     public class YardControlConsist : IEnumerable<TrainCar>
     {
         public readonly List<TrainCar> Cars;
-        public Track Track;
+        public Track Track { get; private set; }
         public YardConsistState State;
-        public ResourceClass LoadResource = null;
         public float LastUpdateTime = 0;
+
+        private Job _currentJob = null;
+        public Job CurrentJob
+        {
+            get => _currentJob;
+            set
+            {
+                _currentJob = value;
+                _currentJob.JobCompleted += OnCurrentJobCompleted;
+                LoadDestination = _currentJob.chainData.chainDestinationYardId;
+                Track = null;
+            }
+        }
+
+        public string LoadDestination = null;
+        public ResourceClass LoadResource = null;
+
 
         public float Length => 
             YardTracksOrganizer.Instance.GetTotalTrainCarsLength(Cars) +
             YardTracksOrganizer.Instance.GetSeparationLengthBetweenCars(Cars.Count);
 
-        public CarsPerTrack CarsPerTrack => new CarsPerTrack(Track, Cars.Select(tc => tc.logicCar).ToList());
+        public int CarCount => Cars.Count;
+
         public List<Car> LogicCars => Cars.Select(tc => tc.logicCar).ToList();
 
         public YardControlConsist( Track track, IEnumerable<TrainCar> cars, YardConsistState state )
@@ -37,6 +54,21 @@ namespace DVIndustry
             Cars = cars.ToList();
             Track = track;
             State = state;
+        }
+
+        public bool CanHoldResource( ResourceClass resource )
+        {
+            foreach( TrainCar car in Cars )
+            {
+                if( !resource.CanBeHeldBy(car.carType) ) return false;
+            }
+
+            return true;
+        }
+
+        private void OnCurrentJobCompleted( Job job )
+        {
+            Track = Cars[0].logicCar.CurrentTrack;
         }
 
         public IEnumerator<TrainCar> GetEnumerator()

@@ -91,18 +91,19 @@ namespace DVIndustry
             return true;
         }
 
-        public void StoreInputCargo( CargoType cargoType, float amount )
+        public ResourceClass StoreInputCargo( CargoType cargoType, float amount )
         {
             foreach( IndustryResource stock in inputStockpile )
             {
                 if( stock.AcceptedItems.ContainsCargo(cargoType) )
                 {
                     stock.Amount += amount;
-                    return;
+                    return stock.AcceptedItems;
                 }
             }
 
             DVIndustry.ModEntry.Logger.Warning($"Tried to store an input ({cargoType}) that this industry doesn't accept");
+            return null;
         }
 
         public void StoreResource( IndustryResource resource )

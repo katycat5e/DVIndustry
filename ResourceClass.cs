@@ -71,6 +71,17 @@ namespace DVIndustry
 
         public readonly string ID;
         public readonly CargoType[] Cargos;
+        public float AverageValue { get; private set; }
+
+        private HashSet<TrainCarType> compatibleCars = null;
+
+        private void Init()
+        {
+            var containers = Cargos.SelectMany(carg => CargoTypes.GetCarContainerTypesThatSupportCargoType(carg)).Distinct();
+            compatibleCars = containers.SelectMany(cont => CargoTypes.GetTrainCarTypesThatAreSpecificContainerType(cont)).ToHashSet();
+
+            AverageValue = Cargos.Sum(cargo => ResourceTypes.GetFullDamagePriceForCargo(cargo)) / Cargos.Length;
+        }
 
         private ResourceClass() { }
 
@@ -78,12 +89,14 @@ namespace DVIndustry
         {
             ID = id;
             Cargos = types.ToArray();
+            Init();
         }
 
         private ResourceClass( CargoType singleType, string overrideId = null )
         {
             ID = overrideId ?? Enum.GetName(typeof(CargoType), singleType);
             Cargos = new CargoType[] { singleType };
+            Init();
         }
 
         private ResourceClass( string id, IEnumerable<CargoType> types, params ResourceClass[] toInclude )
@@ -96,8 +109,15 @@ namespace DVIndustry
             return Cargos.Contains(cargo);
         }
 
+        public bool CanBeHeldBy( TrainCarType carType )
+        {
+            return compatibleCars.Contains(carType);
+        }
+
         public CargoType GetCargoForCar( TrainCarType carType )
         {
+            if( !CanBeHeldBy(carType) ) return CargoType.None;
+
             if( Cargos.Length == 1 )
             {
                 if( CargoTypes.CanCarContainCargoType(carType, Cargos[0]) ) return Cargos[0];

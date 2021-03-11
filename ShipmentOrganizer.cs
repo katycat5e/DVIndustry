@@ -25,13 +25,11 @@ namespace DVIndustry
 
         class ShipmentData
         {
-            public Job Job;
             public ResourceClass Resource;
             public int Amount;
 
-            public ShipmentData( Job job, ResourceClass resource, int amount )
+            public ShipmentData( ResourceClass resource, int amount )
             {
-                Job = job;
                 Resource = resource;
                 Amount = amount;
             }
@@ -40,8 +38,8 @@ namespace DVIndustry
         private static readonly Dictionary<string, List<IndustryYardPair>> acceptingIndustries =
             new Dictionary<string, List<IndustryYardPair>>();
 
-        private static readonly Dictionary<string, FancyLinkedList<ShipmentData>> pendingShipments =
-            new Dictionary<string, FancyLinkedList<ShipmentData>>();
+        private static readonly Dictionary<string, Dictionary<ResourceClass, int>> pendingShipments =
+            new Dictionary<string, Dictionary<ResourceClass, int>>();
 
         public static void RegisterStation( IndustryController industry, YardController yard )
         {
@@ -60,30 +58,39 @@ namespace DVIndustry
             }
 
             // add station to the pending shipments dict
-            pendingShipments[industry.StationId] = new FancyLinkedList<ShipmentData>();
+            pendingShipments[industry.StationId] = new Dictionary<ResourceClass, int>();
         }
 
-        public static void OnShipmentCreated( Job job, ResourceClass resource, int nCars )
+        public static void OnShipmentCreated( string destYard, ResourceClass resource, int nCars )
         {
-            var shipment = new ShipmentData(job, resource, nCars);
-            string destYard = job.chainData.chainDestinationYardId;
+            var shipmentDict = pendingShipments[destYard];
 
-            pendingShipments[destYard].AddLast(shipment);
-        }
-
-        public static void OnShipmentEnded( Job job )
-        {
-            string destYard = job.chainData.chainDestinationYardId;
-
-            if( pendingShipments.TryGetValue(destYard, out var shipmentList) )
+            if( shipmentDict.TryGetValue(resource, out int shipmentAmt) )
             {
-                shipmentList.RemoveFirstWhere(s => s.Job == job);
+                shipmentDict[resource] = shipmentAmt + nCars;
+            }
+            else
+            {
+                shipmentDict[resource] = nCars;
             }
         }
 
-        private static IEnumerable<ProductRequest> GetRequests( string key )
+        public static void OnCarUnloaded( string stationId, ResourceClass resource )
+        {
+            var shipmentDict = pendingShipments[stationId];
+
+            if( shipmentDict.TryGetValue(resource, out int shipmentAmt) )
+            {
+                shipmentDict[resource] = shipmentAmt - 1;
+            }
+        }
+
+        private static IEnumerable<ProductRequest> GetRequests( ResourceClass resource )
         {
             // Get industries where demand for product
+            List<ProductRequest> requests = new List<ProductRequest>();
+            string key = resource.ID;
+
             if( acceptingIndustries.TryGetValue(key, out List<IndustryYardPair> sinks) )
             {
                 foreach( IndustryYardPair station in sinks )
@@ -103,18 +110,18 @@ namespace DVIndustry
 
                     if( demand > 0 )
                     {
-                        yield return new ProductRequest(key, station.ID, demand);
+                        requests.Add(new ProductRequest(resource, station.ID, demand));
                     }
                 }
             }
 
-            yield break;
+            return requests.OrderByDescending(req => req.CarCount);
         }
 
         public static void UpdateProductDemand( ProductRequestCollection requestCollection )
         {
             requestCollection.Requests.Clear();
-            requestCollection.Requests.AddRange(GetRequests(requestCollection.Resource.Key));
+            requestCollection.Requests.AddRange(GetRequests(requestCollection.Resource));
         }
     }
 
@@ -131,13 +138,13 @@ namespace DVIndustry
 
     public class ProductRequest
     {
-        public string ResourceKey;
+        public ResourceClass Resource;
         public string DestYard;
         public int CarCount;
 
-        public ProductRequest( string resource, string dest, int nCars )
+        public ProductRequest( ResourceClass resource, string dest, int nCars )
         {
-            ResourceKey = resource;
+            Resource = resource;
             DestYard = dest;
             CarCount = nCars;
         }

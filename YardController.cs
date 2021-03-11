@@ -59,6 +59,9 @@ namespace DVIndustry
             RegisterController(AttachedStation.stationInfo.YardID, this);
         }
 
+        //============================================================================================
+        #region Monobehaviour Update Handling
+
         void Update()
         {
             // wait for loading to finish
@@ -67,8 +70,10 @@ namespace DVIndustry
             // check if demand cache needs initialized
             if( outputsDemand == null )
             {
+                // sort most valuable outputs first
                 outputsDemand = AttachedIndustry.OutputResources
                     .Select(resName => new ProductRequestCollection(ResourceClass.Parse(resName)))
+                    .OrderByDescending(reqColl => reqColl.Resource.AverageValue)
                     .ToArray();
             }
 
@@ -107,6 +112,16 @@ namespace DVIndustry
             playerWasInRange = playerInRange;
         }
 
+        private void SwitchToBackgroundMode()
+        {
+            InForegroundMode = false;
+        }
+
+        private void SwitchToForegroundMode()
+        {
+            InForegroundMode = true;
+        }
+
         private void ForegroundUpdate()
         {
             float curTime = Time.time;
@@ -116,7 +131,32 @@ namespace DVIndustry
                 switch( consist.State )
                 {
                     case YardConsistState.Empty:
-                        // 
+                        if( IsOnLoadingTrack(consist) )
+                        {
+                            // check if consist is assignable to a new shipment
+                            // requests are sorted by cargo value, then car count
+                            ProductRequest matchingRequest = outputsDemand
+                                .Where(reqColl => consist.CanHoldResource(reqColl.Resource))
+                                .SelectMany(reqColl => reqColl.Requests)
+                                .FirstOrDefault();
+
+                            if( matchingRequest != null )
+                            {
+                                // found a match, first entry is best candidate
+                                AssignShipmentToConsist(matchingRequest, consist);
+                                consist.LastUpdateTime = curTime;
+                                break;
+                            }
+
+                            // empty consist is taking up loading track, get it out of here if possible
+                            float len = consist.Length;
+                            YardTrackInfo shuntCandidate = YardUtil.FindBestFitTrack(stagingTracks, len);
+                            if( shuntCandidate != null )
+                            {
+                                // yay, we can (make the player) move the consist
+
+                            }
+                        }
                         break;
 
                     case YardConsistState.Loading:
@@ -143,6 +183,24 @@ namespace DVIndustry
         {
 
         }
+
+        #endregion
+        //============================================================================================
+        #region Job Creation
+
+        private void AssignShipmentToConsist( ProductRequest request, YardControlConsist consist )
+        {
+            consist.LoadResource = request.Resource;
+            consist.LoadDestination = request.DestYard;
+            consist.State = YardConsistState.Loading;
+
+            request.CarCount -= consist.CarCount;
+            ShipmentOrganizer.OnShipmentCreated(StationId, request.Resource, consist.CarCount);
+        }
+
+        #endregion
+        //============================================================================================
+        #region Loading/Unloading
 
         private static bool CarIsStationary( TrainCar car ) => Math.Abs(car.GetForwardSpeed()) < CAR_STOPPED_EPSILON;
         
@@ -178,24 +236,19 @@ namespace DVIndustry
 
             CargoType toUnload = car.LoadedCargo;
             car.logicCar.UnloadCargo(car.LoadedCargoAmount, toUnload);
-            AttachedIndustry.StoreInputCargo(toUnload, 1f);
+            ResourceClass storedClass = AttachedIndustry.StoreInputCargo(toUnload, 1f);
+
+            ShipmentOrganizer.OnCarUnloaded(StationId, storedClass);
 
 #if DEBUG
             DVIndustry.ModEntry.Logger.Log($"{StationId} - Unloaded {toUnload} from {car.ID}");
 #endif
         }
 
-        private void SwitchToBackgroundMode()
-        {
-            InForegroundMode = false;
-        }
+        #endregion
 
-        private void SwitchToForegroundMode()
-        {
-            InForegroundMode = true;
-        }
+        #region ControllerBase interface
 
-        // ControllerBase interface
         public override YardControllerSaveData GetSaveData()
         {
             return null;
@@ -251,5 +304,7 @@ namespace DVIndustry
             //    currentUnloadIdx = 0;
             //}
         }
+
+        #endregion
     }
 }
