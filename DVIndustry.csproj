@@ -37,6 +37,9 @@
     <Reference Include="Assembly-CSharp">
       <HintPath>dv\DerailValley_Data\Managed\Assembly-CSharp.dll</HintPath>
     </Reference>
+    <Reference Include="DV.PointSet">
+      <HintPath>dv\DerailValley_Data\Managed\DV.PointSet.dll</HintPath>
+    </Reference>
     <Reference Include="Newtonsoft.Json">
       <HintPath>dv\DerailValley_Data\Managed\Newtonsoft.Json.dll</HintPath>
     </Reference>
@@ -72,6 +75,8 @@
     <Compile Include="Jobs\ShuntingStoreJobDefinition.cs" />
     <Compile Include="Patch_StationController.cs" />
     <Compile Include="ShipmentOrganizer.cs" />
+    <Compile Include="VirtualConsist.cs" />
+    <Compile Include="VirtualTrainCar.cs" />
     <Compile Include="YardControlConsist.cs" />
     <Compile Include="Utilities.cs" />
     <Compile Include="ResourceClass.cs" />
