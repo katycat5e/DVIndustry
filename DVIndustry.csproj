@@ -68,6 +68,8 @@
     <Compile Include="IndustryResource.cs" />
     <Compile Include="IndustrySaveDataCollection.cs" />
     <Compile Include="IndustrySaveDataManager.cs" />
+    <Compile Include="Jobs\JobGenerator.cs" />
+    <Compile Include="Jobs\ShuntingStoreJobDefinition.cs" />
     <Compile Include="Patch_StationController.cs" />
     <Compile Include="ShipmentOrganizer.cs" />
     <Compile Include="YardControlConsist.cs" />

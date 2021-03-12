@@ -11,6 +11,7 @@ namespace DVIndustry
         None = 0,
         Empty,
         WaitingForTransport,
+        WaitingForPlayerShunt,
         Loading,
         Unloading,
         WaitingForLoad,
@@ -24,6 +25,8 @@ namespace DVIndustry
         public YardConsistState State;
         public float LastUpdateTime = 0;
 
+        public event Action<YardControlConsist, Job> JobEnded;
+
         private Job _currentJob = null;
         public Job CurrentJob
         {
@@ -31,8 +34,14 @@ namespace DVIndustry
             set
             {
                 _currentJob = value;
-                _currentJob.JobCompleted += OnCurrentJobCompleted;
-                LoadDestination = _currentJob.chainData.chainDestinationYardId;
+                if( _currentJob != null )
+                {
+                    _currentJob.JobCompleted += OnCurrentJobEnded;
+                    _currentJob.JobAbandoned += OnCurrentJobEnded;
+                    _currentJob.JobExpired += OnCurrentJobEnded;
+
+                    LoadDestination = _currentJob.chainData.chainDestinationYardId;
+                }
                 Track = null;
             }
         }
@@ -66,9 +75,11 @@ namespace DVIndustry
             return true;
         }
 
-        private void OnCurrentJobCompleted( Job job )
+        private void OnCurrentJobEnded( Job job )
         {
             Track = Cars[0].logicCar.CurrentTrack;
+            _currentJob = null;
+            JobEnded?.Invoke(this, job);
         }
 
         public IEnumerator<TrainCar> GetEnumerator()

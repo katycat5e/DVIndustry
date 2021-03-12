@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using UnityEngine;
 using DV.Logic.Job;
+using DVIndustry.Jobs;
 
 namespace DVIndustry
 {
@@ -34,7 +35,9 @@ namespace DVIndustry
 
         private IndustryController AttachedIndustry = null;
 
-        private readonly List<YardControlConsist> consistList = new List<YardControlConsist>();
+        private readonly FancyLinkedList<YardControlConsist> activeConsists = new FancyLinkedList<YardControlConsist>();
+        private readonly FancyLinkedList<YardControlConsist> emptyConsists = new FancyLinkedList<YardControlConsist>();
+
         private YardTrackInfo[] loadingTracks;
         private YardTrackInfo[] stagingTracks;
 
@@ -86,8 +89,14 @@ namespace DVIndustry
             // check for player presence
             float playerDistance = StationRange.PlayerSqrDistanceFromStationCenter;
             bool playerTookJob = AttachedStation.logicStation.takenJobs.Count > 0;
-            playerInRange = !StationRange.IsPlayerOutOfJobDestroyZone(playerDistance, playerTookJob);
 
+            // hysteresis to prevent walking in and out of range
+            bool inGenRange = StationRange.IsPlayerInJobGenerationZone(playerDistance);
+            bool outDestroyRange = StationRange.IsPlayerOutOfJobDestroyZone(playerDistance, playerTookJob);
+
+            if( inGenRange ) playerInRange = true;
+            else if( outDestroyRange ) playerInRange = false;
+            
             if( playerInRange && !playerWasInRange )
             {
                 // just entered
@@ -126,7 +135,7 @@ namespace DVIndustry
         {
             float curTime = Time.time;
 
-            foreach( YardControlConsist consist in consistList )
+            foreach( YardControlConsist consist in activeConsists )
             {
                 switch( consist.State )
                 {
@@ -154,7 +163,8 @@ namespace DVIndustry
                             if( shuntCandidate != null )
                             {
                                 // yay, we can (make the player) move the consist
-
+                                Job storeJob = JobGenerator.CreateShuntingStoreJob(AttachedStation, consist, shuntCandidate.Track);
+                                consist.JobEnded += OnConsistStoreJobEnded;
                             }
                         }
                         break;
@@ -196,6 +206,12 @@ namespace DVIndustry
 
             request.CarCount -= consist.CarCount;
             ShipmentOrganizer.OnShipmentCreated(StationId, request.Resource, consist.CarCount);
+        }
+
+        private void OnConsistStoreJobEnded( YardControlConsist consist, Job job )
+        {
+            activeConsists.Remove(consist);
+            emptyConsists.AddLast(consist);
         }
 
         #endregion
