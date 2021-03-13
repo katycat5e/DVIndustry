@@ -75,4 +75,71 @@ namespace DVIndustry.Jobs
             DestTracks = destTracks;
         }
     }
+
+    public class ShuntingPickupJobDefinition : StaticJobDefinition
+    {
+        public List<Car> Consist;
+        public Track DropoffTrack;
+        public List<CarsPerTrack> Pickups;
+
+        public override JobDefinitionDataBase GetJobDefinitionSaveData()
+        {
+            string[] guidsFromCars = GetGuidsFromCars(Consist);
+            if( guidsFromCars == null )
+            {
+                throw new Exception("Couldn't extract transportCarsGuids");
+            };
+
+            CarGuidsPerTrackId[] pickupIds = Pickups
+                .Select(cpt => new CarGuidsPerTrackId(cpt.track.ID.FullID, GetGuidsFromCars(cpt.cars)))
+                .ToArray();
+
+            return new ShuntingPickupDefinitionData(
+                timeLimitForJob, initialWage, logicStation.ID,
+                chainData.chainOriginYardId, chainData.chainDestinationYardId,
+                (int)requiredLicenses, guidsFromCars, DropoffTrack.ID.FullID, pickupIds);
+        }
+
+        public override List<TrackReservation> GetRequiredTrackReservations()
+        {
+            return new List<TrackReservation>(1) { new TrackReservation(DropoffTrack, YardUtil.GetConsistLength(Consist)) };
+        }
+
+        protected override void GenerateJob( Station jobOriginStation, float timeLimit = 0, float initialWage = 0, string forcedJobId = null, JobLicenses requiredLicenses = JobLicenses.Basic )
+        {
+            if( (Consist == null) || (Consist.Count == 0) ||
+                (DropoffTrack == null) || (Pickups == null) || (Pickups.Count == 0) )
+            {
+                Consist = null;
+                DropoffTrack = null;
+                Pickups = null;
+                return;
+            }
+
+            List<Task> moveTasks = Pickups
+                .Select(cpt => new TransportTask(cpt.cars, DropoffTrack, cpt.track))
+                .Cast<Task>()
+                .ToList();
+
+            var mainTask = new ParallelTasks(moveTasks);
+            job = new Job(mainTask, JobType.ShuntingLoad, timeLimit, initialWage, chainData, forcedJobId, requiredLicenses);
+        }
+    }
+
+    public class ShuntingPickupDefinitionData : JobDefinitionDataBase
+    {
+        public string[] TrainCarGuids;
+        public string EndTrack;
+        public CarGuidsPerTrackId[] SrcTracks;
+
+        public ShuntingPickupDefinitionData(
+            float timeLimitForJob, float initialWage, string stationId, string originStationId, string destinationStationId, int requiredLicenses,
+            string[] transportCarGuids, string endTrackId, CarGuidsPerTrackId[] startTracks ) :
+            base(timeLimitForJob, initialWage, stationId, originStationId, destinationStationId, requiredLicenses)
+        {
+            TrainCarGuids = transportCarGuids;
+            EndTrack = endTrackId;
+            SrcTracks = startTracks;
+        }
+    }
 }

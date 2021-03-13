@@ -21,7 +21,7 @@ namespace DVIndustry
     public class YardControlConsist : IEnumerable<TrainCar>
     {
         public readonly List<TrainCar> Cars;
-        public Track Track { get; private set; }
+        public Track Track { get; set; }
         public YardConsistState State;
         public float LastUpdateTime = 0;
 
@@ -75,7 +75,6 @@ namespace DVIndustry
 
         private void OnCurrentJobEnded( Job job )
         {
-            Track = Cars[0].logicCar.CurrentTrack;
             _currentJob = null;
             JobEnded?.Invoke(this, job);
         }

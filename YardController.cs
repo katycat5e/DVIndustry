@@ -13,9 +13,9 @@ namespace DVIndustry
     {
         public readonly Track Track;
         public readonly ResourceClass LoadingClass;
-        public YardConsistState CurrentUse = YardConsistState.None;
+        public bool Claimed => (Track.OccupiedLength + YardTracksOrganizer.Instance.GetReservedSpace(Track)) > 0;
 
-        public double AvailableSpace => Track.length - Track.OccupiedLength;
+        public double AvailableSpace => Track.length - Track.OccupiedLength - YardTracksOrganizer.Instance.GetReservedSpace(Track);
 
         public YardTrackInfo( Track track, ResourceClass loadResource = null )
         {
@@ -39,19 +39,20 @@ namespace DVIndustry
         private readonly FancyLinkedList<YardControlConsist> emptyConsists = new FancyLinkedList<YardControlConsist>();
 
         private YardTrackInfo[] loadingTracks;
-        private YardTrackInfo[] stagingTracks;
+        private Track[] stagingTracks;
+        private static readonly Dictionary<Track, YardTrackInfo> loadTrackMap = new Dictionary<Track, YardTrackInfo>();
 
-        private HashSet<Track> loadTrackSet;
-        private bool IsOnLoadingTrack( YardControlConsist consist ) => loadTrackSet.Contains(consist.Track);
+        private bool IsOnLoadingTrack( YardControlConsist consist ) => loadTrackMap.ContainsKey(consist.Track);
 
         private ProductRequestCollection[] outputsDemand = null;
 
 
-        public void Initialize( YardTrackInfo[] loadTracks, YardTrackInfo[] stageTracks )
+        public void Initialize( YardTrackInfo[] loadTracks, Track[] stageTracks )
         {
             loadingTracks = loadTracks;
             stagingTracks = stageTracks;
-            loadTrackSet = loadTracks.Select(t => t.Track).ToHashSet();
+            
+            foreach( var lt in loadTracks ) loadTrackMap.Add(lt.Track, lt);
         }
 
         void OnEnable()
@@ -135,6 +136,7 @@ namespace DVIndustry
         {
             float curTime = Time.time;
 
+            // handle consists on the loading tracks first
             foreach( YardControlConsist consist in activeConsists )
             {
                 switch( consist.State )
@@ -153,17 +155,18 @@ namespace DVIndustry
                             {
                                 // found a match, first entry is best candidate
                                 AssignShipmentToConsist(matchingRequest, consist);
+                                consist.State = YardConsistState.Loading;
                                 consist.LastUpdateTime = curTime;
                                 break;
                             }
 
                             // empty consist is taking up loading track, get it out of here if possible
                             float len = consist.Length;
-                            YardTrackInfo shuntCandidate = YardUtil.FindBestFitTrack(stagingTracks, len);
+                            Track shuntCandidate = YardUtil.FindBestFitTrack(stagingTracks, len);
                             if( shuntCandidate != null )
                             {
                                 // yay, we can (make the player) move the consist
-                                Job storeJob = JobGenerator.CreateShuntingStoreJob(AttachedStation, consist, shuntCandidate.Track);
+                                Job storeJob = JobGenerator.CreateShuntingStoreJob(AttachedStation, consist, shuntCandidate);
                                 consist.JobEnded += OnConsistStoreJobEnded;
                             }
                         }
@@ -187,6 +190,9 @@ namespace DVIndustry
                         break;
                 }
             }
+
+            // handle creation of new outgoing jobs
+            TryToFillRequest();
         }
 
         private void BackgroundUpdate()
@@ -198,20 +204,98 @@ namespace DVIndustry
         //============================================================================================
         #region Job Creation
 
+        private void TryToFillRequest()
+        {
+            List<YardControlConsist> loadCandidates = new List<YardControlConsist>();
+
+            bool multipleRequests = outputsDemand.Length > 1;
+
+            foreach( ProductRequestCollection prodCollection in outputsDemand )
+            {
+                loadCandidates.Clear();
+
+                YardTrackInfo loadTrack = loadingTracks.FirstOrDefault(track =>
+                    (track.LoadingClass == prodCollection.Resource) && !track.Claimed);
+
+                if( loadTrack == null ) continue; // no available track
+
+                loadCandidates.AddRange(emptyConsists.Where(cars => cars.CanHoldResource(prodCollection.Resource)));
+
+                // if no consists available, try next product
+                // TODO: pull cars from other stations
+                if( loadCandidates.Count < 1 ) continue;
+
+                // dang this is a knapsack problem isn't it
+                ProductRequest toFill = prodCollection.Requests.First();
+                YardControlConsist[] selectedConsists = FindBestConsistCombo(loadCandidates, toFill.CarCount, multipleRequests);
+
+                Job shuntJob = JobGenerator.CreateShuntingPickupJob(AttachedStation, selectedConsists, loadTrack.Track);
+
+                // setup each cut of cars for loading
+                int nCars = 0;
+                foreach( var cut in selectedConsists )
+                {
+                    emptyConsists.Remove(cut);
+                    cut.LoadResource = toFill.Resource;
+                    cut.LoadDestination = toFill.DestYard;
+                    nCars += cut.CarCount;
+                }
+
+                ShipmentOrganizer.OnShipmentCreated(toFill.DestYard, toFill.Resource, nCars);
+
+                // TODO: handle job completion
+                return;
+            }
+        }
+
+        private static YardControlConsist[] FindBestConsistCombo( IList<YardControlConsist> pool, int desiredLength, bool limitSingle )
+        {
+            YardControlConsist a = null, b = null;
+
+            // only option
+            if( pool.Count == 1 ) return new[] { pool[0] };
+
+            foreach( var consist in pool )
+            {
+                if( consist.CarCount >= desiredLength ) return new[] { consist };
+
+                if( (a == null) || (consist.CarCount > a.CarCount) ) a = consist;
+
+                if( !limitSingle && (consist != a) && ((b == null) || (consist.CarCount < b.CarCount)) ) b = consist;
+            }
+
+            // longest consist < desiredLength in a
+            // shortest consist in b
+
+            if( limitSingle ) return new[] { a };
+            else return new[] { a, b };
+        }
+
         private void AssignShipmentToConsist( ProductRequest request, YardControlConsist consist )
         {
             consist.LoadResource = request.Resource;
             consist.LoadDestination = request.DestYard;
-            consist.State = YardConsistState.Loading;
 
             request.CarCount -= consist.CarCount;
-            ShipmentOrganizer.OnShipmentCreated(StationId, request.Resource, consist.CarCount);
+            ShipmentOrganizer.OnShipmentCreated(request.DestYard, request.Resource, consist.CarCount);
         }
 
         private void OnConsistStoreJobEnded( YardControlConsist consist, Job job )
         {
+            // forget original consist
             activeConsists.Remove(consist);
-            emptyConsists.AddLast(consist);
+
+            // calculate the new consist split
+            List<YardControlConsist> newConsists = new List<YardControlConsist>();
+            foreach( TrainCar car in consist )
+            {
+                if( !(newConsists.Find(c => c.Track == car.logicCar.CurrentTrack) is YardControlConsist subConsist) )
+                {
+                    subConsist = new YardControlConsist(car.logicCar.CurrentTrack, new[] { car }, YardConsistState.Empty);
+                    emptyConsists.AddLast(subConsist);
+                }
+                subConsist.Cars.Add(car);
+            }
         }
 
         #endregion

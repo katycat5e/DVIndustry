@@ -12,7 +12,7 @@ namespace DVIndustry
         private static readonly Dictionary<string, IndustryProcess[]> industryConfigs = new Dictionary<string, IndustryProcess[]>();
 
         private static readonly Dictionary<string, YardTrackInfo[]> yardLoadingTracks = new Dictionary<string, YardTrackInfo[]>();
-        private static readonly Dictionary<string, YardTrackInfo[]> yardStagingTracks = new Dictionary<string, YardTrackInfo[]>();
+        private static readonly Dictionary<string, Track[]> yardStagingTracks = new Dictionary<string, Track[]>();
 
         public static IndustryProcess[] GetProcesses( string stationId )
         {
@@ -26,7 +26,7 @@ namespace DVIndustry
             else return null;
         }
 
-        public static YardTrackInfo[] GetStagingTracks( string stationId )
+        public static Track[] GetStagingTracks( string stationId )
         {
             if( yardStagingTracks.TryGetValue(stationId, out var trackList) ) return trackList;
             else return null;
@@ -127,10 +127,10 @@ namespace DVIndustry
                 yardLoadingTracks[jsonYard.StationId] = loadTracks;
 
                 // parse staging tracks
-                YardTrackInfo[] stageTracks;
+                Track[] stageTracks;
                 if( (jsonYard.StagingTracks != null) && (jsonYard.StagingTracks.Length > 0) )
                 {
-                    stageTracks = new YardTrackInfo[jsonYard.StagingTracks.Length];
+                    stageTracks = new Track[jsonYard.StagingTracks.Length];
                     for( int i = 0; i < stageTracks.Length; i++ )
                     {
                         Track track = GetTrack(jsonYard.StagingTracks[i]);
@@ -140,10 +140,10 @@ namespace DVIndustry
                             return false;
                         }
 
-                        stageTracks[i] = new YardTrackInfo(track);
+                        stageTracks[i] = track;
                     }
                 }
-                else stageTracks = new YardTrackInfo[0];
+                else stageTracks = new Track[0];
 
                 yardStagingTracks[jsonYard.StationId] = stageTracks;
             }

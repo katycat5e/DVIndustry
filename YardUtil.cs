@@ -9,14 +9,14 @@ namespace DVIndustry
 {
     static class YardUtil
     {
-        public static YardTrackInfo FindBestFitTrack( IEnumerable<YardTrackInfo> trackPool, float requiredLength )
+        public static Track FindBestFitTrack( IEnumerable<Track> trackPool, float requiredLength )
         {
-            YardTrackInfo bestCandidate = null;
+            Track bestCandidate = null;
             double minSpace = float.PositiveInfinity;
 
-            foreach( YardTrackInfo trackInfo in trackPool )
+            foreach( Track trackInfo in trackPool )
             {
-                double freeSpace = YardTracksOrganizer.Instance.GetFreeSpaceOnTrack(trackInfo.Track);
+                double freeSpace = YardTracksOrganizer.Instance.GetFreeSpaceOnTrack(trackInfo);
                 if( freeSpace >= requiredLength )
                 {
                     if( freeSpace < minSpace )

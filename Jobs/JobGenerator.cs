@@ -31,6 +31,7 @@ namespace DVIndustry.Jobs
             shuntJob.PopulateBaseJobDefinition(station.logicStation, bonusTime, payment, chainData, JobLicenses.Shunting);
 
             shuntJob.Consist = consist.LogicCars;
+            shuntJob.PickupTrack = consist.Track;
             shuntJob.Dropoffs = new List<CarsPerTrack>() { new CarsPerTrack(destTrack, shuntJob.Consist) };
 
             chainController.AddJobDefinitionToChain(shuntJob);
@@ -40,6 +41,44 @@ namespace DVIndustry.Jobs
             consist.CurrentJob = chainController.currentJobInChain;
 
             DVIndustry.ModEntry.Logger.Log($"Generated shunting job to store train at {station.stationInfo.YardID}");
+            return chainController.currentJobInChain;
+        }
+
+        public static Job CreateShuntingPickupJob( StationController station, IList<YardControlConsist> consists, Track destTrack )
+        {
+            GameObject jobChainGO = new GameObject($"ChainJob[DVI_Store]: {station.logicStation.ID}");
+            jobChainGO.transform.SetParent(station.transform);
+            var chainController = new JobChainController(jobChainGO);
+
+            var chainData = new StationsChainData(station.stationInfo.YardID, station.stationInfo.YardID);
+
+            float estimatedMove = consists.Sum(cut => EstimateMoveDistance(cut.Track, destTrack));
+            List<Car> allCars = consists.SelectMany(cut => cut.LogicCars).ToList();
+
+            // calculate payment
+            PaymentCalculationData emptyPaymentData = GetEmptyPaymentData(allCars.Select(c => c.carType));
+            float payment = JobPaymentCalculator.CalculateJobPayment(JobType.ShuntingUnload, estimatedMove, emptyPaymentData);
+
+            // bonus time
+            float bonusTime = CalculateShuntingBonusTime(estimatedMove, consists.Count);
+
+            ShuntingPickupJobDefinition shuntJob = jobChainGO.AddComponent<ShuntingPickupJobDefinition>();
+            shuntJob.PopulateBaseJobDefinition(station.logicStation, bonusTime, payment, chainData, JobLicenses.Shunting);
+
+            shuntJob.Consist = allCars;
+            shuntJob.DropoffTrack = destTrack;
+            shuntJob.Pickups = consists.Select(cut => new CarsPerTrack(cut.Track, cut.LogicCars)).ToList();
+
+            chainController.AddJobDefinitionToChain(shuntJob);
+            chainController.FinalizeSetupAndGenerateFirstJob();
+
+            foreach( YardControlConsist cut in consists )
+            {
+                cut.State = YardConsistState.WaitingForPlayerShunt;
+                cut.CurrentJob = chainController.currentJobInChain;
+            }
+
+            DVIndustry.ModEntry.Logger.Log($"Generated shunting job to assemble train at {station.stationInfo.YardID}");
             return chainController.currentJobInChain;
         }
 

@@ -99,11 +99,11 @@ namespace DVIndustry
                     int demand = station.Industry.GetDemand(key);
                     if( pendingShipments.TryGetValue(station.ID, out var shipments) && (shipments.Count > 0) )
                     {
-                        foreach( ShipmentData shipment in shipments )
+                        foreach( var shipmentPair in shipments )
                         {
-                            if( key == shipment.Resource.ID )
+                            if( key == shipmentPair.Key.ID )
                             {
-                                demand -= shipment.Amount;
+                                demand -= shipmentPair.Value;
                             }
                         }
                     }

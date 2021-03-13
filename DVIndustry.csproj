@@ -9,9 +9,10 @@
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>DVIndustry</RootNamespace>
     <AssemblyName>DVIndustry</AssemblyName>
-    <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <Deterministic>true</Deterministic>
+    <TargetFrameworkProfile />
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -75,7 +76,7 @@
     <Compile Include="IndustrySaveDataCollection.cs" />
     <Compile Include="IndustrySaveDataManager.cs" />
     <Compile Include="Jobs\JobGenerator.cs" />
-    <Compile Include="Jobs\ShuntingStoreJobDefinition.cs" />
+    <Compile Include="Jobs\ShuntingJobDefinitions.cs" />
     <Compile Include="Patch_StationController.cs" />
     <Compile Include="ShipmentOrganizer.cs" />
     <Compile Include="VirtualConsist.cs" />
