@@ -50,9 +50,7 @@ namespace DVIndustry
         public ResourceClass LoadResource = null;
 
 
-        public float Length => 
-            YardTracksOrganizer.Instance.GetTotalTrainCarsLength(Cars) +
-            YardTracksOrganizer.Instance.GetSeparationLengthBetweenCars(Cars.Count);
+        public float Length => YardUtil.GetConsistLength(Cars);
 
         public int CarCount => Cars.Count;
 

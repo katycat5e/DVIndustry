@@ -30,6 +30,9 @@ namespace DVIndustry.Jobs
             ShuntingStoreJobDefinition shuntJob = jobChainGO.AddComponent<ShuntingStoreJobDefinition>();
             shuntJob.PopulateBaseJobDefinition(station.logicStation, bonusTime, payment, chainData, JobLicenses.Shunting);
 
+            shuntJob.Consist = consist.LogicCars;
+            shuntJob.Dropoffs = new List<CarsPerTrack>() { new CarsPerTrack(destTrack, shuntJob.Consist) };
+
             chainController.AddJobDefinitionToChain(shuntJob);
             chainController.FinalizeSetupAndGenerateFirstJob();
 
