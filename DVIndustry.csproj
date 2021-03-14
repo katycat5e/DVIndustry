@@ -71,15 +71,14 @@
   <ItemGroup>
     <Compile Include="ControllerBase.cs" />
     <Compile Include="Extensions.cs" />
+    <Compile Include="FancyLinkedList.cs" />
     <Compile Include="IndustryConfigManager.cs" />
     <Compile Include="IndustryResource.cs" />
     <Compile Include="IndustrySaveDataCollection.cs" />
     <Compile Include="IndustrySaveDataManager.cs" />
     <Compile Include="Jobs\JobGenerator.cs" />
     <Compile Include="Jobs\ShuntingJobDefinitions.cs" />
-    <Compile Include="Patch_StationController.cs" />
     <Compile Include="ShipmentOrganizer.cs" />
-    <Compile Include="VirtualConsist.cs" />
     <Compile Include="VirtualTrainCar.cs" />
     <Compile Include="YardControlConsist.cs" />
     <Compile Include="Utilities.cs" />
@@ -89,7 +88,6 @@
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="StartupPatches.cs" />
     <Compile Include="YardController.cs" />
-    <Compile Include="YardControllerCache.cs" />
     <Compile Include="YardUtil.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

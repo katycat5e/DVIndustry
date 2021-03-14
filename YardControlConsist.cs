@@ -1,92 +1,227 @@
-﻿using System;
+﻿using DV.Logic.Job;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
-using DV.Logic.Job;
+using UnityEngine;
 
 namespace DVIndustry
 {
     public enum YardConsistState
     {
-        None = 0,
-        Empty,
-        WaitingForTransport,
-        WaitingForPlayerShunt,
+        Empty = 0,
+        Loaded,
         Loading,
-        Unloading,
-        WaitingForLoad,
-        WaitingForUnload
+        Unloading
     }
 
-    public class YardControlConsist : IEnumerable<TrainCar>
+    public class YardControlConsist
     {
-        public readonly List<TrainCar> Cars;
-        public Track Track { get; set; }
-        public YardConsistState State;
+        private const float CAR_STOPPED_EPSILON = 0.2f;
+
+        private List<TrainCar> Cars;
+        private List<VirtualTrainCar> VirtualCars;
+        public YardConsistState State { get; private set; }
+        public ResourceClass CargoClass { get; private set; }
         public float LastUpdateTime = 0;
 
-        public event Action<YardControlConsist, Job> JobEnded;
-
-        private Job _currentJob = null;
-        public Job CurrentJob
+        public Track Track
         {
-            get => _currentJob;
-            set
+            get
             {
-                _currentJob = value;
-                if( _currentJob != null )
+                if (Cars != null && Cars.Count > 0 && !Cars.Any(tc => tc.Bogies[0].track != tc.Bogies[1].track || tc.Bogies[0].track != Cars[0].Bogies[0].track))
                 {
-                    _currentJob.JobCompleted += OnCurrentJobEnded;
-                    _currentJob.JobAbandoned += OnCurrentJobEnded;
-                    _currentJob.JobExpired += OnCurrentJobEnded;
-
-                    LoadDestination = _currentJob.chainData.chainDestinationYardId;
+                    return Cars[0].Bogies[0].track.logicTrack;
                 }
-                Track = null;
+                else if (VirtualCars != null && VirtualCars.Count > 0 && !VirtualCars.Any(vtc => vtc.Track != VirtualCars[0].Track))
+                {
+                    return VirtualCars[0].Track;
+                }
+                return null;
             }
         }
 
-        public string LoadDestination = null;
-        public ResourceClass LoadResource = null;
+        public float Length => Cars != null ? YardUtil.GetConsistLength(Cars) : VirtualCars != null ? YardUtil.GetConsistLength(VirtualCars) : 0;
 
-
-        public float Length => YardUtil.GetConsistLength(Cars);
-
-        public int CarCount => Cars.Count;
+        public int CarCount => Cars != null ? Cars.Count : VirtualCars != null ? VirtualCars.Count : 0;
 
         public List<Car> LogicCars => Cars.Select(tc => tc.logicCar).ToList();
 
-        public YardControlConsist( Track track, IEnumerable<TrainCar> cars, YardConsistState state )
+        public YardControlConsist( IEnumerable<TrainCar> cars, YardConsistState state )
         {
             Cars = cars.ToList();
-            Track = track;
             State = state;
+        }
+
+        public void Instantiate()
+        {
+            if (VirtualCars != null)
+            {
+                Cars = VirtualCars.Select(vtc => vtc.Instantiate()).ToList();
+                VirtualCars = null;
+            }
+        }
+
+        public void Virtualize()
+        {
+            if (Cars != null)
+            {
+                VirtualCars = Cars.Select(tc => new VirtualTrainCar(tc)).ToList();
+                Cars = null;
+            }
         }
 
         public bool CanHoldResource( ResourceClass resource )
         {
-            foreach( TrainCar car in Cars )
+            if (Cars != null)
             {
-                if( !resource.CanBeHeldBy(car.carType) ) return false;
+                return Cars.All(tc => resource.CanBeHeldBy(tc.carType));
             }
 
+            if (VirtualCars != null)
+            {
+                return VirtualCars.All(vtc => resource.CanBeHeldBy(vtc.type));
+            }
+
+            return false;
+        }
+
+        private static bool CarIsStationary(TrainCar car) => Math.Abs(car.GetForwardSpeed()) < CAR_STOPPED_EPSILON;
+
+        #region Loading/Unloading
+
+        public bool BeginLoading(ResourceClass resourceClass)
+        {
+            if (State != YardConsistState.Empty) return false;
+
+            CargoClass = resourceClass;
+            State = YardConsistState.Loading;
             return true;
         }
 
-        private void OnCurrentJobEnded( Job job )
+        // returns the amount of cargo loaded, 0 if finished, or -1 for failure
+        public (CargoType, float) LoadNextCar()
         {
-            _currentJob = null;
-            JobEnded?.Invoke(this, job);
+            if (State != YardConsistState.Loading || !YardController.IsOnLoadingTrack(this))
+            {
+                return ( CargoType.None, -1 );
+            }
+
+            if (Cars != null)
+            {
+                var carToLoad = Cars.FirstOrDefault(tc => tc.logicCar.CurrentCargoTypeInCar == CargoType.None);
+                if (carToLoad == null)
+                {
+                    FinishLoading();
+                    return ( CargoType.None, 0 );
+                }
+                if (!CarIsStationary(carToLoad))
+                {
+                    return ( CargoType.None, -1 );
+                }
+                var cargoToLoad = CargoClass.GetCargoForCar(carToLoad.carType);
+                if (cargoToLoad == CargoType.None)
+                {
+                    return ( CargoType.None, -1 );
+                }
+                carToLoad.logicCar.LoadCargo(carToLoad.cargoCapacity, cargoToLoad);
+                LastUpdateTime = Time.time;
+                return ( cargoToLoad, carToLoad.cargoCapacity );
+            }
+            
+            if (VirtualCars != null)
+            {
+                var carToLoad = VirtualCars.FirstOrDefault(vtc => vtc.loadedCargo == CargoType.None);
+                if (carToLoad == null)
+                {
+                    FinishLoading();
+                    return ( CargoType.None, 0 );
+                }
+                var cargoToLoad = CargoClass.GetCargoForCar(carToLoad.type);
+                if (cargoToLoad == CargoType.None)
+                {
+                    return ( CargoType.None, -1 );
+                }
+                LastUpdateTime = Time.time;
+                return ( cargoToLoad, carToLoad.LoadCargo(cargoToLoad) );
+            }
+
+            return ( CargoType.None, -1 );
         }
 
-        public IEnumerator<TrainCar> GetEnumerator()
+        private void FinishLoading()
         {
-            return ((IEnumerable<TrainCar>)Cars).GetEnumerator();
+            State = YardConsistState.Loaded;
         }
 
-        IEnumerator IEnumerable.GetEnumerator()
+        public bool BeginUnloading(ResourceClass resourceClass)
         {
-            return ((IEnumerable)Cars).GetEnumerator();
+            if (State != YardConsistState.Loaded) return false;
+
+            State = YardConsistState.Unloading;
+            return true;
         }
+
+        // returns the amount of cargo unloaded, 0 if finished, or -1 for failure
+        public (CargoType, float) UnloadNextCar()
+        {
+            if (State != YardConsistState.Unloading || !YardController.IsOnLoadingTrack(this))
+            {
+                return ( CargoType.None, -1 );
+            }
+
+            if (Cars != null)
+            {
+                var carToUnload = Cars.FirstOrDefault(tc => tc.logicCar.CurrentCargoTypeInCar != CargoType.None);
+                if (carToUnload == null)
+                {
+                    FinishUnloading();
+                    return (CargoType.None, 0);
+                }
+                var cargoToUnload = carToUnload.LoadedCargo;
+                var amountToUnload = carToUnload.cargoCapacity;
+                carToUnload.logicCar.UnloadCargo(amountToUnload, cargoToUnload);
+                LastUpdateTime = Time.time;
+                return ( cargoToUnload, amountToUnload );
+            }
+
+            if (VirtualCars != null)
+            {
+                var carToLoad = VirtualCars.FirstOrDefault(vtc => vtc.loadedCargo != CargoType.None);
+                if (carToLoad == null)
+                {
+                    FinishUnloading();
+                    return (CargoType.None, 0);
+                }
+                LastUpdateTime = Time.time;
+                return carToLoad.UnloadCargo();
+            }
+
+            return (CargoType.None, -1);
+        }
+
+        private void FinishUnloading()
+        {
+            State = YardConsistState.Empty;
+            CargoClass = null;
+        }
+
+        #endregion
+
+        #region Repositioning
+
+        public bool ShiftCars(double span, bool forward = true)
+        {
+            // TODO: shift cars algorithm
+            throw new NotImplementedException();
+        }
+
+        public bool RelocateCars(Track track)
+        {
+            // TODO: relocate cars algorithm
+            throw new NotImplementedException();
+        }
+
+        #endregion
     }
 }

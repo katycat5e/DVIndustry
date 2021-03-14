@@ -91,6 +91,35 @@ namespace DVIndustry
             return true;
         }
 
+        private IndustryResource FindOutputStock( CargoType cargoType )
+        {
+            foreach( IndustryResource stock in outputStockpile )
+            {
+                if( stock.AcceptedItems.ContainsCargo(cargoType) )
+                {
+                    return stock;
+                }
+            }
+            return null;
+        }
+
+        public ResourceClass TakeOutputCargo( CargoType cargoType, float amount )
+        {
+            var stock = FindOutputStock( cargoType );
+            if( stock != null )
+            {
+                if( stock.Amount >= amount )
+                {
+                    stock.Amount -= amount;
+                    return stock.AcceptedItems;
+                }
+                DVIndustry.ModEntry.Logger.Warning($"Tried to take an output ({amount} of {cargoType}), but this industry doesn't have enough ({stock.Amount})");
+            }
+
+            DVIndustry.ModEntry.Logger.Warning($"Tried to take an output ({cargoType}) that this industry doesn't provide");
+            return null;
+        }
+
         public ResourceClass StoreInputCargo( CargoType cargoType, float amount )
         {
             foreach( IndustryResource stock in inputStockpile )

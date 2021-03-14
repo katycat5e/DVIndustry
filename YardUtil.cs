@@ -51,5 +51,16 @@ namespace DVIndustry
 
             return totalLength + 0.3f * (cars.Count + 1);
         }
+
+        public static float GetConsistLength( ICollection<VirtualTrainCar> cars )
+        {
+            float totalLength = 0;
+            foreach( VirtualTrainCar car in cars )
+            {
+                totalLength += car.length;
+            }
+
+            return totalLength + 0.3f * (cars.Count + 1);
+        }
     }
 }

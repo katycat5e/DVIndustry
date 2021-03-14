@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -6,6 +7,7 @@ using System.Threading.Tasks;
 using UnityEngine;
 using DV.Logic.Job;
 using DVIndustry.Jobs;
+using HarmonyLib;
 
 namespace DVIndustry
 {
@@ -27,22 +29,25 @@ namespace DVIndustry
     public class YardController : ControllerBase<YardController, YardControllerSaveData>
     {
         private const float LOAD_UNLOAD_DELAY = 10f;
-        private const float CAR_STOPPED_EPSILON = 0.2f;
 
-        public bool InForegroundMode { get; private set; } = false;
         private bool playerInRange = false;
-        private bool playerWasInRange = false;
 
         private IndustryController AttachedIndustry = null;
 
-        private readonly FancyLinkedList<YardControlConsist> activeConsists = new FancyLinkedList<YardControlConsist>();
-        private readonly FancyLinkedList<YardControlConsist> emptyConsists = new FancyLinkedList<YardControlConsist>();
+        private readonly FancyLinkedList<YardControlConsist> consists = null;
+        private FancyLinkedList<YardControlConsist> LoadingConsists =>
+            new FancyLinkedList<YardControlConsist>( consists != null ? consists.Where(c => c.State == YardConsistState.Loading) : new YardControlConsist[] { } );
+        private FancyLinkedList<YardControlConsist> UnloadingConsists =>
+            new FancyLinkedList<YardControlConsist>(consists != null ? consists.Where(c => c.State == YardConsistState.Unloading) : new YardControlConsist[] { });
+        private FancyLinkedList<YardControlConsist> LoadedConsists =>
+            new FancyLinkedList<YardControlConsist>(consists != null ? consists.Where(c => c.State == YardConsistState.Loaded) : new YardControlConsist[] { });
+        private FancyLinkedList<YardControlConsist> EmptyConsists =>
+            new FancyLinkedList<YardControlConsist>(consists != null ? consists.Where(c => c.State == YardConsistState.Empty) : new YardControlConsist[] { });
 
         private YardTrackInfo[] loadingTracks;
         private Track[] stagingTracks;
         private static readonly Dictionary<Track, YardTrackInfo> loadTrackMap = new Dictionary<Track, YardTrackInfo>();
-
-        private bool IsOnLoadingTrack( YardControlConsist consist ) => loadTrackMap.ContainsKey(consist.Track);
+        public static bool IsOnLoadingTrack( YardControlConsist consist ) => consist.Track != null && loadTrackMap.ContainsKey(consist.Track);
 
         private ProductRequestCollection[] outputsDemand = null;
 
@@ -61,6 +66,33 @@ namespace DVIndustry
             AttachedStation = gameObject.GetComponent<StationController>();
 
             RegisterController(AttachedStation.stationInfo.YardID, this);
+        }
+
+        private void InstantiateConsists()
+        {
+            if (consists == null)
+            {
+                return;
+            }
+
+            // TODO: should this use a coroutine for better performance?
+            foreach (var consist in consists)
+            {
+                consist.Instantiate();
+            }
+        }
+
+        private void VirtualizeConsists()
+        {
+            if (consists == null)
+            {
+                return;
+            }
+
+            foreach (var consist in consists)
+            {
+                consist.Virtualize();
+            }
         }
 
         //============================================================================================
@@ -86,113 +118,46 @@ namespace DVIndustry
             {
                 ShipmentOrganizer.UpdateProductDemand(requestCollection);
             }
-
-            // check for player presence
-            float playerDistance = StationRange.PlayerSqrDistanceFromStationCenter;
-            bool playerTookJob = AttachedStation.logicStation.takenJobs.Count > 0;
-
-            // hysteresis to prevent walking in and out of range
-            bool inGenRange = StationRange.IsPlayerInJobGenerationZone(playerDistance);
-            bool outDestroyRange = StationRange.IsPlayerOutOfJobDestroyZone(playerDistance, playerTookJob);
-
-            if( inGenRange ) playerInRange = true;
-            else if( outDestroyRange ) playerInRange = false;
             
-            if( playerInRange && !playerWasInRange )
-            {
-                // just entered
-                SwitchToForegroundMode();
-            }
-            else if( !playerInRange && playerWasInRange )
-            {
-                // just left
-                SwitchToBackgroundMode();
-            }
-            else if( playerInRange )
+            if( playerInRange )
             {
                 // normal in-range processing
-                ForegroundUpdate();
+                LoadAndStoreCargo();
             }
             else
             {
                 // not in range
-                BackgroundUpdate();
+                LoadAndStoreCargo();
             }
-
-            playerWasInRange = playerInRange;
         }
 
-        private void SwitchToBackgroundMode()
-        {
-            InForegroundMode = false;
-        }
-
-        private void SwitchToForegroundMode()
-        {
-            InForegroundMode = true;
-        }
-
-        private void ForegroundUpdate()
+        private void LoadAndStoreCargo()
         {
             float curTime = Time.time;
 
-            // handle consists on the loading tracks first
-            foreach( YardControlConsist consist in activeConsists )
+            // handle consists on the loading tracks
+            foreach (YardControlConsist consist in LoadingConsists)
             {
-                switch( consist.State )
+                if ((curTime - consist.LastUpdateTime) >= LOAD_UNLOAD_DELAY)
                 {
-                    case YardConsistState.Empty:
-                        if( IsOnLoadingTrack(consist) )
-                        {
-                            // check if consist is assignable to a new shipment
-                            // requests are sorted by cargo value, then car count
-                            ProductRequest matchingRequest = outputsDemand
-                                .Where(reqColl => consist.CanHoldResource(reqColl.Resource))
-                                .SelectMany(reqColl => reqColl.Requests)
-                                .FirstOrDefault();
-
-                            if( matchingRequest != null )
-                            {
-                                // found a match, first entry is best candidate
-                                AssignShipmentToConsist(matchingRequest, consist);
-                                consist.State = YardConsistState.Loading;
-                                consist.LastUpdateTime = curTime;
-                                break;
-                            }
-
-                            // empty consist is taking up loading track, get it out of here if possible
-                            float len = consist.Length;
-                            Track shuntCandidate = YardUtil.FindBestFitTrack(stagingTracks, len);
-                            if( shuntCandidate != null )
-                            {
-                                // yay, we can (make the player) move the consist
-                                Job storeJob = JobGenerator.CreateShuntingStoreJob(AttachedStation, consist, shuntCandidate);
-                                consist.JobEnded += OnConsistStoreJobEnded;
-                            }
-                        }
-                        break;
-
-                    case YardConsistState.Loading:
-                        if( (curTime - consist.LastUpdateTime) >= LOAD_UNLOAD_DELAY )
-                        {
-                            LoadOneCar(consist);
-                        }
-                        break;
-
-                    case YardConsistState.Unloading:
-                        if( (curTime - consist.LastUpdateTime) >= LOAD_UNLOAD_DELAY )
-                        {
-                            UnloadOneCar(consist);
-                        }
-                        break;
-
-                    default:
-                        break;
+                    var (cargoLoaded, amountLoaded) = consist.LoadNextCar();
+                    IndustryController.At(StationId).TakeOutputCargo(cargoLoaded, amountLoaded);
+#if DEBUG
+                    DVIndustry.ModEntry.Logger.Log($"{StationId} - Loaded {cargoLoaded} ({amountLoaded})");
+#endif
                 }
             }
-
-            // handle creation of new outgoing jobs
-            TryToFillRequest();
+            foreach (YardControlConsist consist in UnloadingConsists)
+            {
+                if ((curTime - consist.LastUpdateTime) >= LOAD_UNLOAD_DELAY)
+                {
+                    var (cargoUnloaded, amountUnloaded) = consist.UnloadNextCar();
+                    IndustryController.At(StationId).StoreInputCargo(cargoUnloaded, amountUnloaded);
+#if DEBUG
+                    DVIndustry.ModEntry.Logger.Log($"{StationId} - Unloaded {cargoUnloaded} ({amountUnloaded})");
+#endif
+                }
+            }
         }
 
         private void BackgroundUpdate()
@@ -204,149 +169,91 @@ namespace DVIndustry
         //============================================================================================
         #region Job Creation
 
-        private void TryToFillRequest()
+        private Coroutine hydrationCoro;
+        private Coroutine generationCoro;
+
+        public void HydrateOrGenerateCars()
         {
-            List<YardControlConsist> loadCandidates = new List<YardControlConsist>();
-
-            bool multipleRequests = outputsDemand.Length > 1;
-
-            foreach( ProductRequestCollection prodCollection in outputsDemand )
+            if (hydrationCoro != null || generationCoro != null)
             {
-                loadCandidates.Clear();
-
-                YardTrackInfo loadTrack = loadingTracks.FirstOrDefault(track =>
-                    (track.LoadingClass == prodCollection.Resource) && !track.Claimed);
-
-                if( loadTrack == null ) continue; // no available track
-
-                loadCandidates.AddRange(emptyConsists.Where(cars => cars.CanHoldResource(prodCollection.Resource)));
-
-                // if no consists available, try next product
-                // TODO: pull cars from other stations
-                if( loadCandidates.Count < 1 ) continue;
-
-                // dang this is a knapsack problem isn't it
-                ProductRequest toFill = prodCollection.Requests.First();
-                YardControlConsist[] selectedConsists = FindBestConsistCombo(loadCandidates, toFill.CarCount, multipleRequests);
-
-                Job shuntJob = JobGenerator.CreateShuntingPickupJob(AttachedStation, selectedConsists, loadTrack.Track);
-
-                // setup each cut of cars for loading
-                int nCars = 0;
-                foreach( var cut in selectedConsists )
-                {
-                    emptyConsists.Remove(cut);
-                    cut.LoadResource = toFill.Resource;
-                    cut.LoadDestination = toFill.DestYard;
-                    nCars += cut.CarCount;
-                }
-
-                ShipmentOrganizer.OnShipmentCreated(toFill.DestYard, toFill.Resource, nCars);
-
-                // TODO: handle job completion
                 return;
             }
+
+            if (consists != null)
+            {
+#if DEBUG
+                DVIndustry.ModEntry.Logger.Log($"{StationId} - hydrating {consists.Count} consists...");
+#endif
+                hydrationCoro = StartCoroutine(HydrateConsistsCoro());
+            }
+            else
+            {
+#if DEBUG
+                DVIndustry.ModEntry.Logger.Log($"{StationId} - no consists found! generating new consists...");
+#endif
+                generationCoro = StartCoroutine(GenerateConsistsCoro());
+            }
         }
 
-        private static YardControlConsist[] FindBestConsistCombo( IList<YardControlConsist> pool, int desiredLength, bool limitSingle )
+        public void CancelCarHydrationOrGeneration()
         {
-            YardControlConsist a = null, b = null;
-
-            // only option
-            if( pool.Count == 1 ) return new[] { pool[0] };
-
-            foreach( var consist in pool )
+            if (hydrationCoro != null)
             {
-                if( consist.CarCount >= desiredLength ) return new[] { consist };
-
-                if( (a == null) || (consist.CarCount > a.CarCount) ) a = consist;
-
-                if( !limitSingle && (consist != a) && ((b == null) || (consist.CarCount < b.CarCount)) ) b = consist;
+                StopCoroutine(hydrationCoro);
+                hydrationCoro = null;
+#if DEBUG
+                DVIndustry.ModEntry.Logger.Log($"{StationId} - train car hydration stopped ({AttachedStation.logicStation.availableJobs} jobs generated)");
+#endif
             }
 
-            // longest consist < desiredLength in a
-            // shortest consist in b
-
-            if( limitSingle ) return new[] { a };
-            else return new[] { a, b };
-        }
-
-        private void AssignShipmentToConsist( ProductRequest request, YardControlConsist consist )
-        {
-            consist.LoadResource = request.Resource;
-            consist.LoadDestination = request.DestYard;
-
-            request.CarCount -= consist.CarCount;
-            ShipmentOrganizer.OnShipmentCreated(request.DestYard, request.Resource, consist.CarCount);
-        }
-
-        private void OnConsistStoreJobEnded( YardControlConsist consist, Job job )
-        {
-            // forget original consist
-            activeConsists.Remove(consist);
-
-            // calculate the new consist split
-            List<YardControlConsist> newConsists = new List<YardControlConsist>();
-            foreach( TrainCar car in consist )
+            if (generationCoro != null)
             {
-                if( !(newConsists.Find(c => c.Track == car.logicCar.CurrentTrack) is YardControlConsist subConsist) )
-                {
-                    subConsist = new YardControlConsist(car.logicCar.CurrentTrack, new[] { car }, YardConsistState.Empty);
-                    emptyConsists.AddLast(subConsist);
-                }
-                subConsist.Cars.Add(car);
+                StopCoroutine(generationCoro);
+                generationCoro = null;
+#if DEBUG
+                DVIndustry.ModEntry.Logger.Log($"{StationId} - train car generation stopped ({AttachedStation.logicStation.availableJobs} jobs generated)");
+#endif
             }
+        }
+
+        private IEnumerator HydrateConsistsCoro()
+        {
+            throw new NotImplementedException();
+            // yield return null;
+        }
+
+        private IEnumerator GenerateConsistsCoro()
+        {
+            throw new NotImplementedException();
+            // yield return null;
         }
 
         #endregion
         //============================================================================================
-        #region Loading/Unloading
+        #region Range Handling
 
-        private static bool CarIsStationary( TrainCar car ) => Math.Abs(car.GetForwardSpeed()) < CAR_STOPPED_EPSILON;
-        
-        private void LoadOneCar( YardControlConsist consist )
+        public void PlayerHasEnteredRange()
         {
-            TrainCar car = consist.FirstOrDefault(c => c.LoadedCargoAmount < 1f);
-            if( car == null )
-            {
-                consist.State = YardConsistState.WaitingForTransport;
-                return;
-            }
-
-            if( !CarIsStationary(car) ) return;
-
-            CargoType toLoad = consist.LoadResource.GetCargoForCar(car.carType);
-            car.logicCar.LoadCargo(1f, toLoad);
-
 #if DEBUG
-            DVIndustry.ModEntry.Logger.Log($"{StationId} - Loaded {toLoad} to {car.ID}");
+            DVIndustry.ModEntry.Logger.Log($"{StationId} - player entering station range");
 #endif
+            playerInRange = true;
+            InstantiateConsists();
+            HydrateOrGenerateCars();
         }
 
-        private void UnloadOneCar( YardControlConsist consist )
+        public void PlayerHasExitedRange()
         {
-            TrainCar car = consist.FirstOrDefault(c => c.LoadedCargoAmount > 0f);
-            if( car == null )
-            {
-                consist.State = YardConsistState.Empty;
-                return;
-            }
-
-            if( !CarIsStationary(car) ) return;
-
-            CargoType toUnload = car.LoadedCargo;
-            car.logicCar.UnloadCargo(car.LoadedCargoAmount, toUnload);
-            ResourceClass storedClass = AttachedIndustry.StoreInputCargo(toUnload, 1f);
-
-            ShipmentOrganizer.OnCarUnloaded(StationId, storedClass);
-
 #if DEBUG
-            DVIndustry.ModEntry.Logger.Log($"{StationId} - Unloaded {toUnload} from {car.ID}");
+            DVIndustry.ModEntry.Logger.Log($"{StationId} - player exiting station range");
 #endif
+            playerInRange = false;
+            CancelCarHydrationOrGeneration();
+            VirtualizeConsists();
         }
 
         #endregion
-
+        //============================================================================================
         #region ControllerBase interface
 
         public override YardControllerSaveData GetSaveData()
@@ -407,4 +314,35 @@ namespace DVIndustry
 
         #endregion
     }
+
+    #region Method Patches
+
+    [HarmonyPatch(typeof(StationProceduralJobsController), "TryToGenerateJobs")]
+    static class SignalPlayerEnteredRange
+    {
+        static bool Prefix(StationProceduralJobsController __instance)
+        {
+            if (YardController.At(__instance.stationController.stationInfo.YardID) is YardController yard)
+            {
+                yard.PlayerHasEnteredRange();
+                return false;
+            }
+
+            return true;
+        }
+    }
+
+    [HarmonyPatch(typeof(StationController), "ExpireAllAvailableJobsInStation")]
+    static class SignalPlayerExitedRange
+    {
+        static void Prefix(StationController __instance)
+        {
+            if (YardController.At(__instance.stationInfo.YardID) is YardController yard)
+            {
+                yard.PlayerHasExitedRange();
+            }
+        }
+    }
+
+    #endregion
 }

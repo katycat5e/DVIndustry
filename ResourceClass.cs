@@ -180,8 +180,8 @@ namespace DVIndustry
             }
         );
 
-        public static readonly ResourceClass Steel = new ResourceClass(
-            "Steel",
+        public static readonly ResourceClass SteelParts = new ResourceClass(
+            "SteelParts",
             new CargoType[]
             {
                 CargoType.SteelRolls,

@@ -11,64 +11,46 @@ namespace DVIndustry
 {
     class VirtualTrainCar
     {
-        private string id;
-        private string carGuid;
-        private TrainCarType type;
-        private bool playerSpawn;
-        private Vector3 position;
-        private Vector3 rotation;
-        private int? bog1TrackChildInd;
-        private double? bog1PosOnTrack;
-        private bool bog1Derailed;
-        private int? bog2TrackChildInd;
-        private double? bog2PosOnTrack;
-        private bool bog2Derailed;
-        private bool coupledF;
-        private bool coupledR;
-        private bool exploded;
-        private CargoType loadedCargo;
-        private JObject carState;
-        private JObject locoState;
-
-        public VirtualTrainCar( TrainCar trainCar )
+        public VirtualTrainCar(TrainCar trainCar)
         {
-            id = trainCar.logicCar.ID;
-            carGuid = trainCar.logicCar.carGuid;
             type = trainCar.carType;
             playerSpawn = trainCar.playerSpawnedCar;
             position = trainCar.transform.position - WorldMover.currentMove;
             rotation = trainCar.transform.rotation.eulerAngles;
+            length = trainCar.InterCouplerDistance;
             exploded = trainCar.useExplodedModel;
             loadedCargo = trainCar.logicCar.CurrentCargoTypeInCar;
+            loadedAmount = trainCar.logicCar.LoadedCargoAmount;
+            cargoCapacity = trainCar.cargoCapacity;
 
             var bogie = trainCar.Bogies[0];
             bog1Derailed = bogie.HasDerailed;
-            if( bog1Derailed )
+            if (bog1Derailed)
             {
                 bog1TrackChildInd = null;
                 bog1PosOnTrack = null;
             }
             else
             {
-                bog1TrackChildInd = Array.IndexOf( CarsSaveManager.Instance.OrderedRailtracks, bogie.track );
+                bog1TrackChildInd = Array.IndexOf(CarsSaveManager.Instance.OrderedRailtracks, bogie.track);
                 bog1PosOnTrack = bogie.traveller.Span;
             }
 
             bogie = trainCar.Bogies[1];
             bog2Derailed = bogie.HasDerailed;
-            if( bog2Derailed )
+            if (bog2Derailed)
             {
                 bog2TrackChildInd = null;
                 bog2PosOnTrack = null;
             }
             else
             {
-                bog2TrackChildInd = Array.IndexOf( CarsSaveManager.Instance.OrderedRailtracks, bogie.track );
+                bog2TrackChildInd = Array.IndexOf(CarsSaveManager.Instance.OrderedRailtracks, bogie.track);
                 bog2PosOnTrack = bogie.traveller.Span;
             }
 
             var carStateSave = trainCar.GetComponent<CarStateSave>();
-            if( carStateSave != null )
+            if (carStateSave != null)
             {
                 carState = carStateSave.GetCarStateSaveData();
             }
@@ -78,7 +60,7 @@ namespace DVIndustry
             }
 
             var locoStateSave = trainCar.GetComponent<LocoStateSave>();
-            if( locoStateSave )
+            if (locoStateSave)
             {
                 locoState = locoStateSave.GetLocoStateSaveData();
             }
@@ -90,7 +72,7 @@ namespace DVIndustry
 
         public TrainCar Instantiate()
         {
-            var carPrefab = CarTypes.GetCarPrefab( type );
+            var carPrefab = CarTypes.GetCarPrefab(type);
             var orderedRailTracks = CarsSaveManager.Instance.OrderedRailtracks;
             var bog1Track = bog1TrackChildInd.HasValue ? orderedRailTracks[bog1TrackChildInd.Value] : null;
             var bog1PositionAlongTrack = bog1PosOnTrack.HasValue ? bog1PosOnTrack.Value : 0.0;
@@ -99,11 +81,11 @@ namespace DVIndustry
 
             var trainCar = CarSpawner.SpawnLoadedCar(
                 carPrefab,
-                id,
-                carGuid,
+                SingletonBehaviour<IdGenerator>.Instance.GenerateCarID(type),
+                Guid.NewGuid().ToString(),
                 playerSpawn,
                 position,
-                Quaternion.Euler( rotation ),
+                Quaternion.Euler(rotation),
                 bog1Derailed,
                 bog1Track,
                 bog1PositionAlongTrack,
@@ -111,37 +93,84 @@ namespace DVIndustry
                 bog2Track,
                 bog2PositionAlongTrack,
                 coupledF,
-                coupledR );
+                coupledR);
 
-            if( loadedCargo != CargoType.None )
+            if (loadedCargo != CargoType.None)
             {
-                trainCar.logicCar.LoadCargo( trainCar.cargoCapacity, loadedCargo, null );
+                trainCar.logicCar.LoadCargo(loadedAmount, loadedCargo, null);
             }
 
-            if( exploded )
+            if (exploded)
             {
-                TrainCarExplosion.UpdateTrainCarModelToExploded( trainCar );
+                TrainCarExplosion.UpdateTrainCarModelToExploded(trainCar);
             }
 
-            if( carState != null )
+            if (carState != null)
             {
                 var carStateSave = trainCar.GetComponent<CarStateSave>();
-                if( carStateSave != null )
+                if (carStateSave != null)
                 {
-                    carStateSave.SetCarStateSaveData( carState );
+                    carStateSave.SetCarStateSaveData(carState);
                 }
             }
 
-            if( locoState != null )
+            if (locoState != null)
             {
                 var locoStateSave = trainCar.GetComponent<LocoStateSave>();
-                if( locoStateSave != null )
+                if (locoStateSave != null)
                 {
-                    locoStateSave.SetLocoStateSaveData( locoState );
+                    locoStateSave.SetLocoStateSaveData(locoState);
                 }
             }
 
             return trainCar;
         }
+
+        public float LoadCargo(CargoType cargoType)
+        {
+            loadedCargo = cargoType;
+            return loadedAmount = cargoCapacity;
+        }
+
+        public (CargoType, float) UnloadCargo()
+        {
+            var cargoUnloaded = loadedCargo;
+            loadedCargo = CargoType.None;
+            var amountUnloaded = loadedAmount;
+            loadedAmount = 0f;
+            return (cargoUnloaded, amountUnloaded);
+        }
+
+        public Track Track
+        {
+            get
+            {
+                if (bog1TrackChildInd.HasValue && bog2TrackChildInd.HasValue && bog1TrackChildInd.Value == bog2TrackChildInd.Value)
+                {
+                    return CarsSaveManager.Instance.OrderedRailtracks[bog1TrackChildInd.Value].logicTrack;
+                }
+                return null;
+            }
+        }
+
+        public readonly TrainCarType type;
+        private bool playerSpawn;
+        private Vector3 position;
+        private Vector3 rotation;
+        public readonly float length;
+        private int? bog1TrackChildInd;
+        private double? bog1PosOnTrack;
+        private bool bog1Derailed;
+        private int? bog2TrackChildInd;
+        private double? bog2PosOnTrack;
+        private bool bog2Derailed;
+        private bool coupledF;
+        private bool coupledR;
+        private bool exploded;
+        public CargoType loadedCargo { get; private set; }
+        private float loadedAmount;
+        private float cargoCapacity;
+        private JObject carState;
+        private JObject locoState; 
     }
 }
