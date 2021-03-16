@@ -35,14 +35,15 @@ namespace DVIndustry
         private IndustryController AttachedIndustry = null;
 
         private readonly FancyLinkedList<YardControlConsist> consists = null;
-        private FancyLinkedList<YardControlConsist> LoadingConsists =>
-            new FancyLinkedList<YardControlConsist>( consists != null ? consists.Where(c => c.State == YardConsistState.Loading) : new YardControlConsist[] { } );
-        private FancyLinkedList<YardControlConsist> UnloadingConsists =>
-            new FancyLinkedList<YardControlConsist>(consists != null ? consists.Where(c => c.State == YardConsistState.Unloading) : new YardControlConsist[] { });
-        private FancyLinkedList<YardControlConsist> LoadedConsists =>
-            new FancyLinkedList<YardControlConsist>(consists != null ? consists.Where(c => c.State == YardConsistState.Loaded) : new YardControlConsist[] { });
-        private FancyLinkedList<YardControlConsist> EmptyConsists =>
-            new FancyLinkedList<YardControlConsist>(consists != null ? consists.Where(c => c.State == YardConsistState.Empty) : new YardControlConsist[] { });
+        private IEnumerable<YardControlConsist> LoadingConsists =>
+            (consists != null) ? consists.Where(c => c.State == YardConsistState.Loading) : Enumerable.Empty<YardControlConsist>();
+        private IEnumerable<YardControlConsist> UnloadingConsists =>
+            (consists != null) ? consists.Where(c => c.State == YardConsistState.Unloading) : Enumerable.Empty<YardControlConsist>();
+
+        private IEnumerable<YardControlConsist> LoadedConsists =>
+            (consists != null) ? consists.Where(c => c.State == YardConsistState.Loaded) : Enumerable.Empty<YardControlConsist>();
+        private IEnumerable<YardControlConsist> EmptyConsists =>
+            (consists != null) ? consists.Where(c => c.State == YardConsistState.Empty) : Enumerable.Empty<YardControlConsist>();
 
         private YardTrackInfo[] loadingTracks;
         private Track[] stagingTracks;
@@ -136,26 +137,26 @@ namespace DVIndustry
             float curTime = Time.time;
 
             // handle consists on the loading tracks
-            foreach (YardControlConsist consist in LoadingConsists)
+            foreach (YardControlConsist consist in consists)
             {
                 if ((curTime - consist.LastUpdateTime) >= LOAD_UNLOAD_DELAY)
                 {
-                    var (cargoLoaded, amountLoaded) = consist.LoadNextCar();
-                    IndustryController.At(StationId).TakeOutputCargo(cargoLoaded, amountLoaded);
+                    if( consist.State == YardConsistState.Loading )
+                    {
+                        var (cargoLoaded, amountLoaded) = consist.LoadNextCar();
+                        AttachedIndustry.TakeOutputCargo(cargoLoaded, amountLoaded);
 #if DEBUG
-                    DVIndustry.ModEntry.Logger.Log($"{StationId} - Loaded {cargoLoaded} ({amountLoaded})");
+                        DVIndustry.ModEntry.Logger.Log($"{StationId} - Loaded {cargoLoaded} ({amountLoaded})");
 #endif
-                }
-            }
-            foreach (YardControlConsist consist in UnloadingConsists)
-            {
-                if ((curTime - consist.LastUpdateTime) >= LOAD_UNLOAD_DELAY)
-                {
-                    var (cargoUnloaded, amountUnloaded) = consist.UnloadNextCar();
-                    IndustryController.At(StationId).StoreInputCargo(cargoUnloaded, amountUnloaded);
+                    }
+                    else if( consist.State == YardConsistState.Unloading )
+                    {
+                        var (cargoUnloaded, amountUnloaded) = consist.UnloadNextCar();
+                        AttachedIndustry.StoreInputCargo(cargoUnloaded, amountUnloaded);
 #if DEBUG
-                    DVIndustry.ModEntry.Logger.Log($"{StationId} - Unloaded {cargoUnloaded} ({amountUnloaded})");
+                        DVIndustry.ModEntry.Logger.Log($"{StationId} - Unloaded {cargoUnloaded} ({amountUnloaded})");
 #endif
+                    }
                 }
             }
         }
@@ -218,8 +219,18 @@ namespace DVIndustry
 
         private IEnumerator HydrateConsistsCoro()
         {
-            throw new NotImplementedException();
-            // yield return null;
+            foreach( YardControlConsist consist in consists )
+            {
+                if( consist.State == YardConsistState.Loaded )
+                {
+                    // generate job for loaded consist
+
+                }
+                yield return null; // next frame
+            }
+
+            hydrationCoro = null;
+            yield break;
         }
 
         private IEnumerator GenerateConsistsCoro()
