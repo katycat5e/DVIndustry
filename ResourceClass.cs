@@ -104,6 +104,12 @@ namespace DVIndustry
         {
         }
 
+        public bool ContainsClass( ResourceClass subset )
+        {
+            if( Equals(subset) ) return true;
+            return subset.Cargos.All(c => ContainsCargo(c));
+        }
+
         public bool ContainsCargo( CargoType cargo )
         {
             return Cargos.Contains(cargo);

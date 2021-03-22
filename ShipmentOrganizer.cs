@@ -96,7 +96,8 @@ namespace DVIndustry
                 foreach( IndustryYardPair station in sinks )
                 {
                     // get demand, subtract active/pending shipments
-                    int demand = station.Industry.GetDemand(key);
+                    int demand = station.Industry.GetDemand(resource);
+
                     if( pendingShipments.TryGetValue(station.ID, out var shipments) && (shipments.Count > 0) )
                     {
                         foreach( var shipmentPair in shipments )

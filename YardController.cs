@@ -30,6 +30,7 @@ namespace DVIndustry
     {
         private const float LOAD_UNLOAD_DELAY = 10f;
 
+        private readonly System.Random rand = new System.Random();
         private bool playerInRange = false;
 
         private IndustryController AttachedIndustry = null;
@@ -96,6 +97,43 @@ namespace DVIndustry
             }
         }
 
+        //============================================================================================
+        #region Track Handling
+
+        public Track GetAvailableReceivingTrack( float minLength, ResourceClass toUnload = null )
+        {
+            IEnumerable<YardTrackInfo> pool = (toUnload == null) ? 
+                loadingTracks : 
+                loadingTracks.Where(lt => (lt.Track.length >= minLength) && lt.LoadingClass.ContainsClass(toUnload));
+
+            if( playerInRange )
+            {
+                // cars are instantiated
+                List<Track> candidates = pool.Where(yt => !yt.Claimed).Select(yt => yt.Track).ToList();
+                return candidates.ChooseOne(rand);
+            }
+            else
+            {
+                // TODO handle reservations of virtual cars
+                return null;
+            }
+        }
+
+        public Track GetAvailableStagingTrack( float minLength )
+        {
+            if( playerInRange )
+            {
+                // cars are instantiated, use occupied length
+                return YardUtil.FindBestFitTrack(stagingTracks, minLength);
+            }
+            else
+            {
+                // TODO handle reservations of virtual cars
+                return null;
+            }
+        }
+
+        #endregion
         //============================================================================================
         #region Monobehaviour Update Handling
 
@@ -224,7 +262,7 @@ namespace DVIndustry
                 if( consist.State == YardConsistState.Loaded )
                 {
                     // generate job for loaded consist
-
+                    TryCreateJobLoadedConsist(consist);
                 }
                 yield return null; // next frame
             }
@@ -237,6 +275,33 @@ namespace DVIndustry
         {
             throw new NotImplementedException();
             // yield return null;
+        }
+
+        private void TryCreateJobLoadedConsist( YardControlConsist consist )
+        {
+            YardController destYard = At(consist.Destination);
+            Track destTrack = destYard.GetAvailableReceivingTrack(consist.Length, consist.CargoClass);
+            if( destTrack != null )
+            {
+                // found a destination track, create haul job
+                Job transJob = JobGenerator.CreateTransportJob(this, destYard, consist, destTrack);
+            }
+            else
+            {
+                if( !IsOnLoadingTrack(consist) ) return; // nothing to do with this one
+
+                // can't transport now, shunt to siding
+                destTrack = GetAvailableStagingTrack(consist.Length);
+                if( destTrack != null )
+                {
+                    Job shuntJob = JobGenerator.CreateShuntingJob(this, consist, destTrack);
+                }
+                else
+                {
+                    // no track available ;_;
+                    DVIndustry.ModEntry.Logger.Log($"Loaded consist is stuck on track {consist.Track}");
+                }
+            }
         }
 
         #endregion

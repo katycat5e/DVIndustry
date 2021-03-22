@@ -5,11 +5,13 @@ using DV.Logic.Job;
 
 namespace DVIndustry.Jobs
 {
-    public class ShuntingStoreJobDefinition : StaticJobDefinition
+    public class ShuntingJobDefinition : StaticJobDefinition
     {
+        public bool LoadingJob;
         public List<Car> Consist;
+        public List<CargoType> CarriedCargo = null;
         public Track PickupTrack;
-        public List<CarsPerTrack> Dropoffs;
+        public Track DropoffTrack;
 
         public override JobDefinitionDataBase GetJobDefinitionSaveData()
         {
@@ -19,63 +21,58 @@ namespace DVIndustry.Jobs
                 throw new Exception("Couldn't extract transportCarsGuids");
             };
 
-            CarGuidsPerTrackId[] dropoffIds = Dropoffs
-                .Select(cpt => new CarGuidsPerTrackId(cpt.track.ID.FullID, GetGuidsFromCars(cpt.cars)))
-                .ToArray();
-
             return new ShuntingStoreDefinitionData(
                 timeLimitForJob, initialWage, logicStation.ID,
                 chainData.chainOriginYardId, chainData.chainDestinationYardId,
-                (int)requiredLicenses, guidsFromCars, PickupTrack.ID.FullID, dropoffIds);
+                (int)requiredLicenses, guidsFromCars, CarriedCargo.ToArray(),
+                PickupTrack.ID.FullID, DropoffTrack.ID.FullID, LoadingJob);
         }
 
         public override List<TrackReservation> GetRequiredTrackReservations()
         {
-            return Dropoffs
-                .Select(cpt => new TrackReservation(
-                    cpt.track,
-                    YardUtil.GetConsistLength(cpt.cars)))
-                .ToList();
+            return new List<TrackReservation>(1) { new TrackReservation(DropoffTrack, YardUtil.GetConsistLength(Consist)) };
         }
 
         protected override void GenerateJob( Station jobOriginStation, float timeLimit = 0, float initialWage = 0, string forcedJobId = null, JobLicenses requiredLicenses = JobLicenses.Basic )
         {
             if( (Consist == null) || (Consist.Count == 0) ||
-                (PickupTrack == null) || (Dropoffs == null) || (Dropoffs.Count == 0) )
+                (PickupTrack == null) || (DropoffTrack == null) )
             {
                 Consist = null;
                 PickupTrack = null;
-                Dropoffs = null;
+                DropoffTrack = null;
                 return;
             }
 
-            List<Task> moveTasks = Dropoffs
-                .Select(cpt => new TransportTask(cpt.cars, cpt.track, PickupTrack))
-                .Cast<Task>()
-                .ToList();
+            JobType subType = LoadingJob ? JobType.ShuntingLoad : JobType.ShuntingUnload;
 
-            var mainTask = new ParallelTasks(moveTasks);
-            job = new Job(mainTask, JobType.ShuntingUnload, timeLimit, initialWage, chainData, forcedJobId, requiredLicenses);
+            var mainTask = new TransportTask(Consist, DropoffTrack, PickupTrack, CarriedCargo);
+            job = new Job(mainTask, subType, timeLimit, initialWage, chainData, forcedJobId, requiredLicenses);
         }
     }
 
     public class ShuntingStoreDefinitionData : JobDefinitionDataBase
     {
+        public bool LoadingJob;
         public string[] TrainCarGuids;
+        public CargoType[] Cargo;
         public string StartTrack;
-        public CarGuidsPerTrackId[] DestTracks;
+        public string DestTrack;
 
         public ShuntingStoreDefinitionData(
             float timeLimitForJob, float initialWage, string stationId, string originStationId, string destinationStationId, int requiredLicenses,
-            string[] transportCarGuids, string startTrackId, CarGuidsPerTrackId[] destTracks ) :
+            string[] transportCarGuids, CargoType[] cargo, string startTrackId, string destTrack, bool loadJob ) :
             base(timeLimitForJob, initialWage, stationId, originStationId, destinationStationId, requiredLicenses)
         {
             TrainCarGuids = transportCarGuids;
+            Cargo = cargo;
             StartTrack = startTrackId;
-            DestTracks = destTracks;
+            DestTrack = destTrack;
+            LoadingJob = loadJob;
         }
     }
 
+    /*
     public class ShuntingPickupJobDefinition : StaticJobDefinition
     {
         public List<Car> Consist;
@@ -142,4 +139,5 @@ namespace DVIndustry.Jobs
             SrcTracks = startTracks;
         }
     }
+    */
 }

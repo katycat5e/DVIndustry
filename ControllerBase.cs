@@ -11,7 +11,7 @@ namespace DVIndustry
         where T : ControllerBase<T, SaveType>
     {
         private StationController _AttachedStation;
-        protected StationController AttachedStation
+        public StationController AttachedStation
         {
             get => _AttachedStation;
             set

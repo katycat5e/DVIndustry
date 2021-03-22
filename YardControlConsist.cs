@@ -23,6 +23,8 @@ namespace DVIndustry
         private List<VirtualTrainCar> VirtualCars;
         public YardConsistState State { get; private set; }
         public ResourceClass CargoClass { get; private set; }
+        public string Destination { get; private set; }
+
         public float LastUpdateTime = 0;
 
         public Track Track
@@ -45,7 +47,8 @@ namespace DVIndustry
 
         public int CarCount => Cars != null ? Cars.Count : VirtualCars != null ? VirtualCars.Count : 0;
 
-        public List<Car> LogicCars => Cars.Select(tc => tc.logicCar).ToList();
+        public IEnumerable<TrainCar> TrainCars => Cars;
+        public IEnumerable<Car> LogicCars => Cars.Select(tc => tc.logicCar);
 
         public YardControlConsist( IEnumerable<TrainCar> cars, YardConsistState state )
         {
@@ -90,11 +93,12 @@ namespace DVIndustry
 
         #region Loading/Unloading
 
-        public bool BeginLoading(ResourceClass resourceClass)
+        public bool BeginLoading( ResourceClass resourceClass, string dest )
         {
             if (State != YardConsistState.Empty) return false;
 
             CargoClass = resourceClass;
+            Destination = dest;
             State = YardConsistState.Loading;
             return true;
         }

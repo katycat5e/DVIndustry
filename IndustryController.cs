@@ -146,11 +146,11 @@ namespace DVIndustry
             DVIndustry.ModEntry.Logger.Warning($"Tried to store a resource ({resource.AcceptedItems.ID}) that this industry doesn't use");
         }
 
-        public int GetDemand( string resourceKey )
+        public int GetDemand( ResourceClass resource )
         {
-            if( resourceRates.TryGetValue(resourceKey, out float consumeRate) )
+            if( resourceRates.TryGetValue(resource.ID, out float consumeRate) )
             {
-                double curAmount = stockpileMap[resourceKey].Amount;
+                double curAmount = stockpileMap[resource.ID].Amount;
 
                 // logistic curve for demand based on lack of resource (lower stock -> higher demand)
                 double amt40min = consumeRate * 2400;
