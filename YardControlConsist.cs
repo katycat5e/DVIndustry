@@ -228,5 +228,37 @@ namespace DVIndustry
         }
 
         #endregion
+
+        #region Utilities
+
+        public JobLicenses GetRequiredLicensesForConsist()
+        {
+            var result = LicenseManager.GetRequiredLicenseForNumberOfTransportedCars(CarCount);
+            if( State != YardConsistState.Empty )
+            {
+                result |= LicenseManager.GetRequiredLicensesForCargoTypes(CargoClass.Cargos.ToList());
+            }
+            return result;
+        }
+
+        public static int CompareByLicense( YardControlConsist x, YardControlConsist y )
+        {
+            int result = 0;
+            JobLicenses xReqs = x.GetRequiredLicensesForConsist();
+            if( LicenseManager.GetMissingLicensesForJob(xReqs) == 0 )
+            {
+                // player has all licenses required for consist x
+                result -= 1;
+            }
+            JobLicenses yReqs = y.GetRequiredLicensesForConsist();
+            if( LicenseManager.GetMissingLicensesForJob(yReqs) == 0 )
+            {
+                // player has all licenses required for consist y
+                result += 1;
+            }
+            return result;
+        }
+
+        #endregion
     }
 }

@@ -256,13 +256,14 @@ namespace DVIndustry
 
         private IEnumerator HydrateConsistsCoro()
         {
-            foreach( YardControlConsist consist in consists )
+            // preferentially assign loaded consists to receiving tracks
+            var loadedSorted = LoadedConsists.ToList();
+            yield return null; // next frame
+            loadedSorted.Sort(YardControlConsist.CompareByLicense);
+            yield return null; // next frame
+            foreach ( YardControlConsist consist in loadedSorted )
             {
-                if( consist.State == YardConsistState.Loaded )
-                {
-                    // generate job for loaded consist
-                    TryCreateJobLoadedConsist(consist);
-                }
+                TryCreateJobLoadedConsist(consist);
                 yield return null; // next frame
             }
 
