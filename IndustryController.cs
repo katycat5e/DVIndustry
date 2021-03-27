@@ -135,6 +135,24 @@ namespace DVIndustry
             return null;
         }
 
+        private bool TakeResource( IndustryResource resource )
+        {
+            if( stockpileMap.TryGetValue(resource.Key, out IndustryResource stock) )
+            {
+                if( stock.Amount > resource.Amount )
+                {
+                    stock.Amount -= resource.Amount;
+                    return true;
+                }
+
+                DVIndustry.ModEntry.Logger.Warning($"Tried to take a resource ({resource.AcceptedItems.ID}), but there wasn't enough stockpiled [{stock.Amount}/{resource.Amount}]");
+                return false;
+            }
+
+            DVIndustry.ModEntry.Logger.Warning($"Tried to take a resource ({resource.AcceptedItems.ID}) that this industry doesn't use");
+            return false;
+        }
+
         public void StoreResource( IndustryResource resource )
         {
             if( stockpileMap.TryGetValue(resource.Key, out IndustryResource stock) )
@@ -196,8 +214,20 @@ namespace DVIndustry
                     // try to start idle process
                     if( AreIngredientsAvailable(process) )
                     {
-                        process.IsWorking = true;
-                        process.StartTime = Time.time;
+                        var takenResources = process.Inputs.Where(TakeResource);
+
+                        if (takenResources.Count() == process.Inputs.Length)
+                        {
+                            process.IsWorking = true;
+                            process.StartTime = Time.time;
+                        }
+                        else
+                        {
+                            foreach( var resource in takenResources )
+                            {
+                                StoreResource(resource);
+                            }
+                        }
                     }
                 }
             }
