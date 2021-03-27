@@ -208,6 +208,7 @@ namespace DVIndustry
         {
             State = YardConsistState.Empty;
             CargoClass = null;
+            Destination = null;
         }
 
         #endregion
