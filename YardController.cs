@@ -285,31 +285,28 @@ namespace DVIndustry
             // yield return null;
         }
 
-        private void TryCreateJobLoadedConsist( YardControlConsist consist )
+        private Job TryCreateJobLoadedConsist( YardControlConsist consist )
         {
             YardController destYard = At(consist.Destination);
             Track destTrack = destYard.GetAvailableReceivingTrack(consist.Length, consist.CargoClass);
             if( destTrack != null )
             {
                 // found a destination track, create haul job
-                Job transJob = JobGenerator.CreateTransportJob(this, destYard, consist, destTrack);
+                return JobGenerator.CreateTransportJob(this, destYard, consist, destTrack);
             }
-            else
-            {
-                if( !IsOnLoadingTrack(consist) ) return; // nothing to do with this one
 
-                // can't transport now, shunt to siding
-                destTrack = GetAvailableStagingTrack(consist.Length);
-                if( destTrack != null )
-                {
-                    Job shuntJob = JobGenerator.CreateShuntingJob(this, consist, destTrack);
-                }
-                else
-                {
-                    // no track available ;_;
-                    DVIndustry.ModEntry.Logger.Log($"Loaded consist is stuck on track {consist.Track}");
-                }
+            if( !IsOnLoadingTrack(consist) ) return null; // nothing to do with this one
+
+            // can't transport now, shunt to siding
+            destTrack = GetAvailableStagingTrack(consist.Length);
+            if( destTrack != null )
+            {
+                return JobGenerator.CreateShuntingJob(this, consist, destTrack);
             }
+
+            // no track available ;_;
+            DVIndustry.ModEntry.Logger.Log($"Loaded consist is stuck on track {consist.Track}");
+            return null;
         }
 
         #endregion
