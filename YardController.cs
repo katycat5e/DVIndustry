@@ -102,9 +102,8 @@ namespace DVIndustry
 
         public Track GetAvailableReceivingTrack( float minLength, ResourceClass toUnload = null )
         {
-            IEnumerable<YardTrackInfo> pool = (toUnload == null) ? 
-                loadingTracks : 
-                loadingTracks.Where(lt => (lt.Track.length >= minLength) && lt.LoadingClass.ContainsClass(toUnload));
+            IEnumerable<YardTrackInfo> pool =
+                loadingTracks.Where(lt => (lt.AvailableSpace >= minLength) && (toUnload == null || lt.LoadingClass.ContainsClass(toUnload)));
 
             if( playerInRange )
             {
