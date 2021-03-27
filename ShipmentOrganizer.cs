@@ -38,8 +38,13 @@ namespace DVIndustry
         private static readonly Dictionary<string, List<IndustryYardPair>> acceptingIndustries =
             new Dictionary<string, List<IndustryYardPair>>();
 
-        private static readonly Dictionary<string, Dictionary<ResourceClass, int>> pendingShipments =
-            new Dictionary<string, Dictionary<ResourceClass, int>>();
+        // resources waiting to be taken away from a station
+        private static readonly Dictionary<string, Dictionary<ResourceClass, float>> pendingShipments =
+            new Dictionary<string, Dictionary<ResourceClass, float>>();
+
+        // resources waiting to be received by a station
+        private static readonly Dictionary<string, Dictionary<ResourceClass, float>> pendingDeliveries =
+            new Dictionary<string, Dictionary<ResourceClass, float>>();
 
         public static void RegisterStation( IndustryController industry, YardController yard )
         {
@@ -57,31 +62,47 @@ namespace DVIndustry
                 destList.Add(pair);
             }
 
-            // add station to the pending shipments dict
-            pendingShipments[industry.StationId] = new Dictionary<ResourceClass, int>();
+            // initialize pending input/output trackers
+            pendingShipments[industry.StationId] = new Dictionary<ResourceClass, float>();
+            pendingDeliveries[industry.StationId] = new Dictionary<ResourceClass, float>();
         }
 
-        public static void OnShipmentCreated( string destYard, ResourceClass resource, int nCars )
+        public static void OnShipmentCreated( string originYard, ResourceClass resource, float amount )
         {
-            var shipmentDict = pendingShipments[destYard];
+            var shipmentDict = pendingShipments[originYard];
 
-            if( shipmentDict.TryGetValue(resource, out int shipmentAmt) )
+            if( !shipmentDict.TryGetValue(resource, out float shipmentAmt) )
             {
-                shipmentDict[resource] = shipmentAmt + nCars;
+                shipmentAmt = 0;
             }
-            else
-            {
-                shipmentDict[resource] = nCars;
-            }
+            shipmentDict[resource] = shipmentAmt + amount;
         }
 
-        public static void OnCarUnloaded( string stationId, ResourceClass resource )
+        public static void OnCarLoaded( string originYard, string destYard, ResourceClass resource, float amountLoaded )
         {
-            var shipmentDict = pendingShipments[stationId];
+            var shipmentDict = pendingShipments[originYard];
 
-            if( shipmentDict.TryGetValue(resource, out int shipmentAmt) )
+            if( shipmentDict.TryGetValue(resource, out float amountToBeShipped) )
             {
-                shipmentDict[resource] = shipmentAmt - 1;
+                shipmentDict[resource] = amountToBeShipped - amountLoaded;
+            }
+
+            var deliveryDict = pendingDeliveries[destYard];
+
+            if( !deliveryDict.TryGetValue(resource, out float amountToBeDelivered) )
+            {
+                amountToBeDelivered = 0;
+            }
+            deliveryDict[resource] = amountToBeDelivered + amountLoaded;
+        }
+
+        public static void OnCarUnloaded( string destYard, ResourceClass resource, float amountUnloaded )
+        {
+            var deliveryDict = pendingDeliveries[destYard];
+
+            if( deliveryDict.TryGetValue(resource, out float amountToBeDelivered) )
+            {
+                deliveryDict[resource] = amountToBeDelivered - amountUnloaded;
             }
         }
 
@@ -96,9 +117,9 @@ namespace DVIndustry
                 foreach( IndustryYardPair station in sinks )
                 {
                     // get demand, subtract active/pending shipments
-                    int demand = station.Industry.GetDemand(resource);
+                    float demand = station.Industry.GetDemand(resource);
 
-                    if( pendingShipments.TryGetValue(station.ID, out var shipments) && (shipments.Count > 0) )
+                    if( pendingDeliveries.TryGetValue(station.ID, out var shipments) && (shipments.Count > 0) )
                     {
                         foreach( var shipmentPair in shipments )
                         {
@@ -116,7 +137,7 @@ namespace DVIndustry
                 }
             }
 
-            return requests.OrderByDescending(req => req.CarCount);
+            return requests.OrderByDescending(req => req.Amount);
         }
 
         public static void UpdateProductDemand( ProductRequestCollection requestCollection )
@@ -141,13 +162,13 @@ namespace DVIndustry
     {
         public ResourceClass Resource;
         public string DestYard;
-        public int CarCount;
+        public float Amount;
 
-        public ProductRequest( ResourceClass resource, string dest, int nCars )
+        public ProductRequest( ResourceClass resource, string dest, float amount )
         {
             Resource = resource;
             DestYard = dest;
-            CarCount = nCars;
+            Amount = amount;
         }
     }
 }

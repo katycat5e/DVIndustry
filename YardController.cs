@@ -181,7 +181,11 @@ namespace DVIndustry
                     if( consist.State == YardConsistState.Loading )
                     {
                         var (cargoLoaded, amountLoaded) = consist.LoadNextCar();
-                        AttachedIndustry.TakeOutputCargo(cargoLoaded, amountLoaded);
+                        var resource = AttachedIndustry.TakeOutputCargo(cargoLoaded, amountLoaded);
+                        if( resource != null )
+                        {
+                            ShipmentOrganizer.OnCarLoaded(StationId, consist.Destination, resource, amountLoaded);
+                        }
 #if DEBUG
                         DVIndustry.ModEntry.Logger.Log($"{StationId} - Loaded {cargoLoaded} ({amountLoaded})");
 #endif
@@ -189,7 +193,11 @@ namespace DVIndustry
                     else if( consist.State == YardConsistState.Unloading )
                     {
                         var (cargoUnloaded, amountUnloaded) = consist.UnloadNextCar();
-                        AttachedIndustry.StoreInputCargo(cargoUnloaded, amountUnloaded);
+                        var resource = AttachedIndustry.StoreInputCargo(cargoUnloaded, amountUnloaded);
+                        if( resource != null )
+                        {
+                            ShipmentOrganizer.OnCarUnloaded(consist.Destination, resource, amountUnloaded);
+                        }
 #if DEBUG
                         DVIndustry.ModEntry.Logger.Log($"{StationId} - Unloaded {cargoUnloaded} ({amountUnloaded})");
 #endif

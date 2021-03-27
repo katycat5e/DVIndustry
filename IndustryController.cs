@@ -135,7 +135,7 @@ namespace DVIndustry
             return null;
         }
 
-        private bool TakeResource( IndustryResource resource )
+        private bool TakeIndustryInput( IndustryResource resource )
         {
             if( stockpileMap.TryGetValue(resource.Key, out IndustryResource stock) )
             {
@@ -153,27 +153,28 @@ namespace DVIndustry
             return false;
         }
 
-        public void StoreResource( IndustryResource resource )
+        public void StoreIndustryOutput( IndustryResource resource )
         {
             if( stockpileMap.TryGetValue(resource.Key, out IndustryResource stock) )
             {
                 stock.Amount += resource.Amount;
+                ShipmentOrganizer.OnShipmentCreated(StationId, stock.AcceptedItems, resource.Amount);
                 return;
             }
 
             DVIndustry.ModEntry.Logger.Warning($"Tried to store a resource ({resource.AcceptedItems.ID}) that this industry doesn't use");
         }
 
-        public int GetDemand( ResourceClass resource )
+        public float GetDemand( ResourceClass resource, int minutes = 40 )
         {
             if( resourceRates.TryGetValue(resource.ID, out float consumeRate) )
             {
                 double curAmount = stockpileMap[resource.ID].Amount;
 
                 // logistic curve for demand based on lack of resource (lower stock -> higher demand)
-                double amt40min = consumeRate * 2400;
-                double exponent = -(10f / amt40min) * (curAmount - (amt40min / 2));
-                return Mathd.FloorToInt(amt40min * 1.2d * (1 - 1 / (1 + Math.Exp(exponent))));
+                double amtPerPeriod = consumeRate * minutes * 60;
+                double exponent = -(10d / amtPerPeriod) * (curAmount - (amtPerPeriod / 2d));
+                return (float)(amtPerPeriod * 1.2d * (1 - 1 / (1 + Math.Exp(exponent))));
             }
 
             return 0;
@@ -203,7 +204,7 @@ namespace DVIndustry
                     // process completed, yeet products
                     foreach( IndustryResource output in process.Outputs )
                     {
-                        StoreResource(output);
+                        StoreIndustryOutput(output);
                     }
 
                     process.IsWorking = false;
@@ -214,7 +215,7 @@ namespace DVIndustry
                     // try to start idle process
                     if( AreIngredientsAvailable(process) )
                     {
-                        var takenResources = process.Inputs.Where(TakeResource);
+                        var takenResources = process.Inputs.Where(TakeIndustryInput);
 
                         if (takenResources.Count() == process.Inputs.Length)
                         {
@@ -225,7 +226,7 @@ namespace DVIndustry
                         {
                             foreach( var resource in takenResources )
                             {
-                                StoreResource(resource);
+                                StoreIndustryOutput(resource);
                             }
                         }
                     }
@@ -242,7 +243,7 @@ namespace DVIndustry
                     process.IsWorking = false;
                     foreach( var ingred in process.Inputs )
                     {
-                        StoreResource(ingred);
+                        StoreIndustryOutput(ingred);
                     }
                 }
             }
@@ -280,7 +281,7 @@ namespace DVIndustry
             while( stonks.MoveNext() )
             {
                 IndustryResource resource = stonks.Current;
-                StoreResource(resource);
+                StoreIndustryOutput(resource);
             }
         }
     }
