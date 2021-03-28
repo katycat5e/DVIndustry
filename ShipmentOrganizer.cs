@@ -38,12 +38,12 @@ namespace DVIndustry
         private static readonly Dictionary<string, List<IndustryYardPair>> acceptingIndustries =
             new Dictionary<string, List<IndustryYardPair>>();
 
-        // consists waiting to be delivered to a station
-        private static readonly Dictionary<string, Dictionary<ResourceClass, float>> pendingLoads =
-            new Dictionary<string, Dictionary<ResourceClass, float>>();
-
         // resources waiting to be taken away from a station
         private static readonly Dictionary<string, Dictionary<ResourceClass, float>> pendingShipments =
+            new Dictionary<string, Dictionary<ResourceClass, float>>();
+
+        // consists waiting to be delivered to a station
+        private static readonly Dictionary<string, Dictionary<ResourceClass, float>> pendingConsists =
             new Dictionary<string, Dictionary<ResourceClass, float>>();
 
         // resources waiting to be received by a station
@@ -67,25 +67,14 @@ namespace DVIndustry
             }
 
             // initialize pending input/output trackers
-            pendingLoads[industry.StationId] = new Dictionary<ResourceClass, float>();
             pendingShipments[industry.StationId] = new Dictionary<ResourceClass, float>();
+            pendingConsists[industry.StationId] = new Dictionary<ResourceClass, float>();
             pendingDeliveries[industry.StationId] = new Dictionary<ResourceClass, float>();
         }
 
-        public static void OnLogisticsPlanned( string destYard, ResourceClass resource, float amount )
+        public static void OnShipmentCreated( string outputYard, ResourceClass resource, float amount )
         {
-            var loadDict = pendingLoads[destYard];
-
-            if( !loadDict.TryGetValue(resource, out float loadAmount) )
-            {
-                loadAmount = 0;
-            }
-            loadDict[resource] = loadAmount + amount;
-        }
-
-        public static void OnShipmentCreated( string originYard, ResourceClass resource, float amount )
-        {
-            var shipmentDict = pendingShipments[originYard];
+            var shipmentDict = pendingShipments[outputYard];
 
             if( !shipmentDict.TryGetValue(resource, out float shipmentAmt) )
             {
@@ -94,20 +83,32 @@ namespace DVIndustry
             shipmentDict[resource] = shipmentAmt + amount;
         }
 
-        public static void OnCarLoaded( string originYard, string destYard, ResourceClass resource, float amountLoaded )
+        public static void OnLogisticsPlanned( string outputYard, ResourceClass resource, float amount )
         {
-            var loadDict = pendingLoads[originYard];
 
-            if( loadDict.TryGetValue(resource, out float amountToBeLoaded) )
-            {
-                loadDict[resource] = amountToBeLoaded - amountLoaded;
-            }
-
-            var shipmentDict = pendingShipments[originYard];
+            var shipmentDict = pendingShipments[outputYard];
 
             if( shipmentDict.TryGetValue(resource, out float amountToBeShipped) )
             {
-                shipmentDict[resource] = amountToBeShipped - amountLoaded;
+                shipmentDict[resource] = amountToBeShipped - amount;
+            }
+
+            var loadDict = pendingConsists[outputYard];
+
+            if( !loadDict.TryGetValue(resource, out float loadAmount) )
+            {
+                loadAmount = 0;
+            }
+            loadDict[resource] = loadAmount + amount;
+        }
+
+        public static void OnCarLoaded( string outputYard, string destYard, ResourceClass resource, float amountLoaded )
+        {
+            var consistDict = pendingConsists[outputYard];
+
+            if( consistDict.TryGetValue(resource, out float amountToBeLoaded) )
+            {
+                consistDict[resource] = amountToBeLoaded - amountLoaded;
             }
 
             var deliveryDict = pendingDeliveries[destYard];
@@ -129,41 +130,42 @@ namespace DVIndustry
             }
         }
 
-        public static IEnumerable<ProductCapacity> GetCapacities( YardControlConsist consist )
+        public static IEnumerable<ProductOffering> GetOfferings( YardControlConsist consist )
         {
-            List<ProductCapacity> capacities = new List<ProductCapacity>();
+            List<ProductOffering> offerings = new List<ProductOffering>();
 
             foreach( var (station, pendingResources) in pendingShipments )
             {
                 // need to skip other stations if previous job generation has already locked in a station for this consist
                 if( consist.Destination != null && consist.Destination != station ) continue;
 
-                foreach( var (resourceToShip, amountToShip) in pendingResources )
+                foreach( var (resourceToBeShippped, amountToBeShipped) in pendingResources )
                 {
-                    float supply = amountToShip;
+                    // get available supply, subtract planned shipments
+                    float supply = amountToBeShipped;
 
-                    if( pendingLoads.TryGetValue(station, out var loads) && (loads.Count > 0) )
+                    if( pendingConsists.TryGetValue(station, out var consistDict) && (consistDict.Count > 0) )
                     {
-                        foreach( var (resourceToLoad, amountToLoad) in loads )
+                        foreach( var (resourceToBeLoaded, amountToBeLoaded) in consistDict )
                         {
-                            if( resourceToLoad.ID == resourceToShip.ID )
+                            if( resourceToBeLoaded.ID == resourceToBeShippped.ID )
                             {
-                                supply -= amountToLoad;
+                                supply -= amountToBeLoaded;
                             }
                         }
                     }
 
-                    if ( consist.CanHoldResource(resourceToShip) && supply > 0 )
+                    if ( consist.CanHoldResource(resourceToBeShippped) && supply > 0 )
                     {
-                        capacities.Add(new ProductCapacity(resourceToShip, station, supply));
+                        offerings.Add(new ProductOffering(resourceToBeShippped, station, supply));
                     }
                 }
             }
 
-            return capacities.OrderByDescending(cap => cap.Amount);
+            return offerings.OrderByDescending(cap => cap.Amount);
         }
 
-        private static IEnumerable<ProductRequest> GetRequests( ResourceClass resource )
+        public static IEnumerable<ProductRequest> GetRequests( ResourceClass resource )
         {
             // Get industries where demand for product
             List<ProductRequest> requests = new List<ProductRequest>();
@@ -173,16 +175,27 @@ namespace DVIndustry
             {
                 foreach( IndustryYardPair station in sinks )
                 {
-                    // get demand, subtract active/pending shipments
+                    // get demand, subtract planned shipments
                     float demand = station.Industry.GetDemand(resource);
 
-                    if( pendingDeliveries.TryGetValue(station.ID, out var shipments) && (shipments.Count > 0) )
+                    if( pendingConsists.TryGetValue(station.ID, out var consistDict) && (consistDict.Count > 0) )
                     {
-                        foreach( var (resourceToDeliver, amountToDeliver) in shipments )
+                        foreach( var (resourceToBeLoaded, amountToBeLoaded) in consistDict )
                         {
-                            if( resourceToDeliver.ID == resourceId )
+                            if( resourceToBeLoaded.ID == resourceId )
                             {
-                                demand -= amountToDeliver;
+                                demand -= amountToBeLoaded;
+                            }
+                        }
+                    }
+
+                    if( pendingDeliveries.TryGetValue(station.ID, out var shipmentDict) && (shipmentDict.Count > 0) )
+                    {
+                        foreach( var (resourceToBeDelivered, amountToBeDelivered) in shipmentDict )
+                        {
+                            if( resourceToBeDelivered.ID == resourceId )
+                            {
+                                demand -= amountToBeDelivered;
                             }
                         }
                     }
@@ -195,12 +208,6 @@ namespace DVIndustry
             }
 
             return requests.OrderByDescending(req => req.Amount);
-        }
-
-        public static void UpdateProductDemand( ProductRequestCollection requestCollection )
-        {
-            requestCollection.Requests.Clear();
-            requestCollection.Requests.AddRange(GetRequests(requestCollection.Resource));
         }
     }
 
@@ -229,16 +236,16 @@ namespace DVIndustry
         }
     }
 
-    public class ProductCapacity
+    public class ProductOffering
     {
         public ResourceClass Resource;
-        public string OriginYard;
+        public string SourceYard;
         public float Amount;
 
-        public ProductCapacity(ResourceClass resource, string origin, float amount)
+        public ProductOffering(ResourceClass resource, string source, float amount)
         {
             Resource = resource;
-            OriginYard = origin;
+            SourceYard = source;
             Amount = amount;
         }
     }

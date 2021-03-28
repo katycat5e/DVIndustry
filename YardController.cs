@@ -51,8 +51,6 @@ namespace DVIndustry
         private static readonly Dictionary<Track, YardTrackInfo> loadTrackMap = new Dictionary<Track, YardTrackInfo>();
         public static bool IsOnLoadingTrack( YardControlConsist consist ) => consist.Track != null && loadTrackMap.ContainsKey(consist.Track);
 
-        private ProductRequestCollection[] outputsDemand = null;
-
 
         public void Initialize( YardTrackInfo[] loadTracks, Track[] stageTracks )
         {
@@ -114,7 +112,13 @@ namespace DVIndustry
 
         public void StartLoadingConsist( YardControlConsist consist )
         {
-            throw new NotImplementedException();
+            var requests = ShipmentOrganizer.GetRequests(consist.CargoClass);
+            if( requests.Count() == 0 )
+            {
+                throw new Exception($"{StationId} - found no requests for ResourceClass {consist.CargoClass.ID}");
+            }
+
+            consist.BeginLoading(requests.ElementAt(0).DestYard);
         }
 
         #endregion
@@ -161,22 +165,6 @@ namespace DVIndustry
         {
             // wait for loading to finish
             if( !IndustrySaveDataManager.IsLoadCompleted ) return;
-
-            // check if demand cache needs initialized
-            if( outputsDemand == null )
-            {
-                // sort most valuable outputs first
-                outputsDemand = AttachedIndustry.OutputResources
-                    .Select(resName => new ProductRequestCollection(ResourceClass.Parse(resName)))
-                    .OrderByDescending(reqColl => reqColl.Resource.AverageValue)
-                    .ToArray();
-            }
-
-            // refresh the demand
-            foreach( ProductRequestCollection requestCollection in outputsDemand )
-            {
-                ShipmentOrganizer.UpdateProductDemand(requestCollection);
-            }
             
             if( playerInRange )
             {
@@ -336,24 +324,30 @@ namespace DVIndustry
             if( !playerInRange ) return null;
 
             YardController destYard = At(consist.Destination);
-            Track destTrack = destYard.GetAvailableReceivingTrack(consist.Length, consist.CargoClass);
-            if( destTrack != null )
+            Track loadingTrack = destYard.GetAvailableReceivingTrack(consist.Length, consist.CargoClass);
+            if( loadingTrack != null )
             {
                 // found a destination track, create haul job
-                return JobGenerator.CreateTransportJob(this, destYard, consist, destTrack);
+#if DEBUG
+                DVIndustry.ModEntry.Logger.Log($"{StationId} - found loading track for loaded consist in {consist.Destination}");
+#endif
+                return JobGenerator.CreateTransportJob(this, destYard, consist, loadingTrack);
             }
 
             if( !IsOnLoadingTrack(consist) ) return null; // nothing to do with this one
 
             // can't transport now, shunt to siding
-            destTrack = GetAvailableStagingTrack(consist.Length);
-            if( destTrack != null )
+            Track storageTrack = GetAvailableStagingTrack(consist.Length);
+            if( storageTrack != null )
             {
-                return JobGenerator.CreateLogisticJob(this, this, consist, destTrack);
+#if DEBUG
+                DVIndustry.ModEntry.Logger.Log($"{StationId} - no loading track found for loaded consist. shunting to storage track");
+#endif
+                return JobGenerator.CreateLogisticJob(this, this, consist, storageTrack);
             }
 
             // no track available ;_;
-            DVIndustry.ModEntry.Logger.Log($"Loaded consist is stuck on track {consist.Track}");
+            DVIndustry.ModEntry.Logger.Log($"{StationId} - loaded consist is stuck on track {consist.Track}");
             return null;
         }
 
@@ -361,39 +355,77 @@ namespace DVIndustry
         {
             if( !playerInRange ) return null;
 
-            var capacities = ShipmentOrganizer.GetCapacities(consist);
+            var offerings = ShipmentOrganizer.GetOfferings(consist);
 
             // preferentially use the consist where it already is
-            foreach( var capacity in capacities.Where(cap => cap.OriginYard == StationId) )
+            foreach( var offering in offerings.Where(cap => cap.SourceYard == StationId) )
             {
-                if( capacity.Amount < consist.Capacity ) continue;
+                if( offering.Amount < consist.Capacity ) continue;
 
-                Track destTrack = GetAvailableReceivingTrack(consist.Length, consist.CargoClass);
-                if( destTrack != null )
+                // can it be loaded on the current track?
+                if( IsOnLoadingTrack(consist) && loadTrackMap.TryGetValue(consist.Track, out var yardTrackInfo) && yardTrackInfo.LoadingClass.ContainsClass(offering.Resource))
+                {
+#if DEBUG
+                    DVIndustry.ModEntry.Logger.Log($"{StationId} - skipping logistic job: loading consist on current track");
+#endif
+                    consist.PlanLogistics(offering.Resource, offering.SourceYard);
+                    ShipmentOrganizer.OnLogisticsPlanned(offering.SourceYard, offering.Resource, consist.Capacity);
+                    StartLoadingConsist(consist);
+                    return null;
+                }
+
+                Track loadingTrack = GetAvailableReceivingTrack(consist.Length, consist.CargoClass);
+                if( loadingTrack != null )
                 {
                     // found a destination track, lock in station/resource & create shunting job
-                    consist.PlanLogistics(capacity.Resource, capacity.OriginYard);
-                    return JobGenerator.CreateLogisticJob(this, this, consist, destTrack);
+#if DEBUG
+                    DVIndustry.ModEntry.Logger.Log($"{StationId} - found loading track for empty consist in {offering.SourceYard}");
+#endif
+                    if ( consist.Destination == null )
+                    {
+                        consist.PlanLogistics(offering.Resource, offering.SourceYard);
+                        ShipmentOrganizer.OnLogisticsPlanned(offering.SourceYard, offering.Resource, consist.Capacity);
+                    }
+                    return JobGenerator.CreateLogisticJob(this, this, consist, loadingTrack);
                 }
             }
 
             // secondarily haul the consist to another station
-            foreach( var capacity in capacities.Where(cap => cap.OriginYard != StationId) )
+            foreach( var offering in offerings.Where(cap => cap.SourceYard != StationId) )
             {
-                if( capacity.Amount < consist.Capacity ) continue;
+                if( offering.Amount < consist.Capacity ) continue;
 
-                YardController destYard = At(capacity.OriginYard);
-                Track destTrack = destYard.GetAvailableReceivingTrack(consist.Length, consist.CargoClass);
-                if( destTrack != null )
+                YardController destYard = At(offering.SourceYard);
+                Track loadingTrack = destYard.GetAvailableReceivingTrack(consist.Length, consist.CargoClass);
+                if( loadingTrack != null )
                 {
                     // found a destination track, lock in station/resource & create empty haul job
-                    consist.PlanLogistics(capacity.Resource, capacity.OriginYard);
-                    return JobGenerator.CreateLogisticJob(this, destYard, consist, destTrack);
+#if DEBUG
+                    DVIndustry.ModEntry.Logger.Log($"{StationId} - found loading track for empty consist in {offering.SourceYard}");
+#endif
+                    if ( consist.Destination == null )
+                    {
+                        consist.PlanLogistics(offering.Resource, offering.SourceYard);
+                        ShipmentOrganizer.OnLogisticsPlanned(offering.SourceYard, offering.Resource, consist.Capacity);
+                    }
+                    return JobGenerator.CreateLogisticJob(this, destYard, consist, loadingTrack);
                 }
             }
 
+            if (!IsOnLoadingTrack(consist)) return null; // nothing to do with this one
+
+            // can't load now, shunt to siding
+            Track storageTrack = GetAvailableStagingTrack(consist.Length);
+            if( storageTrack != null )
+            {
+#if DEBUG
+                DVIndustry.ModEntry.Logger.Log($"{StationId} - no loading track found for empty consist. shunting to storage track");
+#endif
+                return JobGenerator.CreateLogisticJob(this, this, consist, storageTrack);
+            }
+
             // no track available ;_;
-            DVIndustry.ModEntry.Logger.Log($"Empty consist is stuck on track {consist.Track}");
+            DVIndustry.ModEntry.Logger.Log($"{StationId} - empty consist is stuck on track {consist.Track}");
             return null;
         }
 

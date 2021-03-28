@@ -68,7 +68,10 @@ namespace DVIndustry.Jobs
             return chainJob;
         }
 
-        // "Logistic Job" as used here describes both empty haul jobs (inter-station logistics) & shunting jobs (intra-station logistics)
+        // a "Logistic Job" as described here involves doing one of three things:
+        //     1. haul an empty consist to a loading track in a distant station (to be loaded)
+        //     2. shunt an empty consist to a loading track in the local station (to be loaded)
+        //     3. shunt a loaded consist to a storage track in the local station (to await shipment when a loading track becomes available at its destination)
         public static Job CreateLogisticJob( YardController source, YardController dest, YardControlConsist consist, Track destTrack )
         {
             JobType jobType = source != dest
@@ -141,10 +144,6 @@ namespace DVIndustry.Jobs
                 if( consist.State == YardConsistState.Empty )
                 {
                     dest.StartLoadingConsist(consist);
-                }
-                else
-                {
-                    consist.BeginUnloading();
                 }
             };
             chainJob.JobAbandoned += job =>
