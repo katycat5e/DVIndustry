@@ -173,8 +173,8 @@ namespace DVIndustry
 
                 // logistic curve for demand based on lack of resource (lower stock -> higher demand)
                 double amtPerPeriod = consumeRate * minutes * 60;
-                double exponent = -(10d / amtPerPeriod) * (curAmount - (amtPerPeriod / 2d));
-                return (float)(amtPerPeriod * 1.2d * (1 - 1 / (1 + Math.Exp(exponent))));
+                double exponent = (10d / amtPerPeriod) * (curAmount - (amtPerPeriod / 2d));
+                return (float)(amtPerPeriod * 1.2d / (1 + Math.Exp(exponent)));
             }
 
             return 0;
