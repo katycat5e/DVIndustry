@@ -47,6 +47,8 @@ namespace DVIndustry
 
         public int CarCount => Cars != null ? Cars.Count : VirtualCars != null ? VirtualCars.Count : 0;
 
+        public float Capacity => Cars != null ? Cars.Aggregate(0f, (sum, tc) => sum + tc.cargoCapacity) : VirtualCars != null ? VirtualCars.Aggregate(0f, (sum, vtc) => sum + vtc.cargoCapacity) : 0;
+
         public IEnumerable<TrainCar> TrainCars => Cars;
         public IEnumerable<Car> LogicCars => Cars.Select(tc => tc.logicCar);
 
@@ -93,11 +95,18 @@ namespace DVIndustry
 
         #region Loading/Unloading
 
-        public bool BeginLoading( ResourceClass resourceClass, string dest )
+        public void PlanLogistics( ResourceClass resource, string dest )
+        {
+            if( State != YardConsistState.Empty ) return;
+
+            CargoClass = resource;
+            Destination = dest;
+        }
+
+        public bool BeginLoading( string dest )
         {
             if (State != YardConsistState.Empty) return false;
 
-            CargoClass = resourceClass;
             Destination = dest;
             State = YardConsistState.Loading;
             return true;
@@ -158,7 +167,7 @@ namespace DVIndustry
             State = YardConsistState.Loaded;
         }
 
-        public bool BeginUnloading(ResourceClass resourceClass)
+        public bool BeginUnloading()
         {
             if (State != YardConsistState.Loaded) return false;
 

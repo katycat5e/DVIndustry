@@ -169,7 +169,7 @@ namespace DVIndustry
         private bool exploded;
         public CargoType loadedCargo { get; private set; }
         private float loadedAmount;
-        private float cargoCapacity;
+        public readonly float cargoCapacity;
         private JObject carState;
         private JObject locoState; 
     }

@@ -20,5 +20,11 @@ namespace DVIndustry
             getTrainCarsFromCarGuids = AccessTools.Method("JobSaveManager.GetTrainCarsFromCarGuids")?
                 .CreateDelegate(typeof(GetCarsFromIdDelegate)) as GetCarsFromIdDelegate;
         }
+
+        public static void Deconstruct<TKey, TValue>(this KeyValuePair<TKey, TValue> source, out TKey Key, out TValue Value)
+        {
+            Key = source.Key;
+            Value = source.Value;
+        }
     }
 }
