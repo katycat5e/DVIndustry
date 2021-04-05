@@ -162,27 +162,49 @@ namespace DVIndustry
         //============================================================================================
         #region Predefined ResourceClasses
 
-        public static readonly ResourceClass AgProducts = new ResourceClass(
-            "AgProducts",
+        public static readonly ResourceClass Livestock = new ResourceClass(
+            "Livestock",
             new CargoType[]
             {
                 CargoType.Pigs,
                 CargoType.Cows,
                 CargoType.Chickens,
                 CargoType.Sheep,
-                CargoType.Goats,
+                CargoType.Goats
+            }
+        );
+
+        public static readonly ResourceClass Grains = new ResourceClass(
+            "Grains",
+            new CargoType[]
+            {
                 CargoType.Wheat,
                 CargoType.Corn
             }
         );
 
-        public static readonly ResourceClass FreshFood = new ResourceClass(
-            "FreshFood",
+        public static readonly ResourceClass AgProducts = new ResourceClass(
+            "AgProducts",
+            new CargoType[] { },
+            Livestock,
+            Grains
+        );
+
+        public static readonly ResourceClass FreshMeat = new ResourceClass(
+            "FreshMeat",
             new CargoType[]
             {
-                CargoType.Bread,
                 CargoType.DairyProducts,
                 CargoType.MeatProducts
+            }
+        );
+
+        public static readonly ResourceClass CannedMeat = new ResourceClass(
+            "CannedMeat",
+            new CargoType[]
+            {
+                CargoType.CannedFood,
+                CargoType.CatFood
             }
         );
 
@@ -206,6 +228,32 @@ namespace DVIndustry
             }
         );
 
+        public static readonly ResourceClass DomesticContainers = new ResourceClass(
+            "DomesticContainers",
+            new CargoType[]
+            {
+                CargoType.EmptyIskar,
+                CargoType.EmptyGoorsk,
+                CargoType.EmptyObco,
+                CargoType.EmptySunOmni
+            }
+        );
+
+        public static readonly ResourceClass ImportedContainers = new ResourceClass(
+            "ImportedContainers",
+            new CargoType[]
+            {
+                CargoType.EmptyAAG,
+                CargoType.EmptyBrohm,
+                CargoType.EmptyChemlek,
+                CargoType.EmptyKrugmann,
+                CargoType.EmptyNeoGamma,
+                CargoType.EmptyNovae,
+                CargoType.EmptySperex,
+                CargoType.EmptyTraeg
+            }
+        );
+
         public static readonly ResourceClass NewVehicles = new ResourceClass(
             "NewVehicles",
             new CargoType[]
@@ -216,35 +264,72 @@ namespace DVIndustry
             }
         );
 
-        public static readonly ResourceClass Electronics = new ResourceClass(
-            "Electronics",
+        public static readonly ResourceClass DomesticChemicals = new ResourceClass(
+            "DomesticChemicals",
             new CargoType[]
             {
-                CargoType.ElectronicsIskar,
+                CargoType.ChemicalsIskar
+            }
+        );
+
+        public static readonly ResourceClass ImportedChemicals = new ResourceClass(
+            "ImportedChemicals",
+            new CargoType[]
+            {
+                CargoType.ChemicalsSperex
+            }
+        );
+
+        public static readonly ResourceClass DomesticElectronics = new ResourceClass(
+            "DomesticElectronics",
+            new CargoType[]
+            {
+                CargoType.ElectronicsIskar
+            }
+        );
+
+        public static readonly ResourceClass ImportedElectronics = new ResourceClass(
+            "ImportedElectronics",
+            new CargoType[]
+            {
                 CargoType.ElectronicsKrugmann,
                 CargoType.ElectronicsAAG,
                 CargoType.ElectronicsNovae,
                 CargoType.ElectronicsTraeg
             }
         );
-        
-        public static readonly ResourceClass Tooling = new ResourceClass(
-            "Tooling",
+
+        public static readonly ResourceClass DomesticTooling = new ResourceClass(
+            "DomesticTooling",
             new CargoType[]
             {
-            CargoType.ToolsIskar,
-            CargoType.ToolsBrohm,
-            CargoType.ToolsAAG,
-            CargoType.ToolsNovae,
-            CargoType.ToolsTraeg
+                CargoType.ToolsIskar
             }
         );
 
-        public static readonly ResourceClass Clothing = new ResourceClass(
-            "Clothing",
+        public static readonly ResourceClass ImportedTooling = new ResourceClass(
+            "ImportedTooling",
             new CargoType[]
             {
-                CargoType.ClothingObco,
+                CargoType.ToolsBrohm,
+                CargoType.ToolsAAG,
+                CargoType.ToolsNovae,
+                CargoType.ToolsTraeg
+            }
+        );
+
+        public static readonly ResourceClass DomesticClothing = new ResourceClass(
+            "DomesticClothing",
+            new CargoType[]
+            {
+                CargoType.ClothingObco
+            }
+        );
+
+        public static readonly ResourceClass ImportedClothing = new ResourceClass(
+            "ImportedClothing",
+            new CargoType[]
+            {
                 CargoType.ClothingNeoGamma,
                 CargoType.ClothingNovae,
                 CargoType.ClothingTraeg
@@ -260,25 +345,57 @@ namespace DVIndustry
             }
         );
 
-        public static readonly ResourceClass ConsumerGoods = new ResourceClass(
-            "ConsumerGoods",
+        public static readonly ResourceClass DomesticLooseGoods = new ResourceClass(
+            "DomesticLooseGoods",
             new CargoType[]
             {
+                CargoType.Bread,
                 CargoType.Methane,
-                CargoType.NewCars,
-                CargoType.CannedFood,
-                CargoType.CatFood,
-                CargoType.Medicine,
-                CargoType.ImportedNewCars,
-                CargoType.ChemicalsIskar,
-                CargoType.ChemicalsSperex,
+                CargoType.NewCars
+            },
+            FreshMeat
+        );
+
+        public static readonly ResourceClass DomesticContainerGoods = new ResourceClass(
+            "DomesticContainerGoods",
+            new CargoType[]
+            {
                 CargoType.Furniture
             },
-            FreshFood,
-            Electronics,
-            Tooling,
-            Clothing,
+            DomesticChemicals,
+            DomesticClothing,
+            DomesticElectronics,
+            DomesticTooling,
+            CannedMeat
+        );
+
+        public static readonly ResourceClass ImportedLooseGoods = new ResourceClass(
+            "ImportedLooseGoods",
+            new CargoType[]
+            {
+                CargoType.ImportedNewCars,
+                CargoType.Medicine
+            },
             RefinedPetrol
+        );
+
+        public static readonly ResourceClass ImportedContainerGoods = new ResourceClass(
+            "ImportedContainerGoods",
+            new CargoType[]
+            {
+                CargoType.Medicine
+            },
+            ImportedChemicals,
+            ImportedClothing,
+            ImportedElectronics,
+            ImportedTooling
+        );
+
+        public static readonly ResourceClass ImportedGoods = new ResourceClass(
+            "ImportedGoods",
+            new CargoType[] { },
+            ImportedLooseGoods,
+            ImportedContainerGoods
         );
 
         #endregion
