@@ -73,12 +73,12 @@ namespace DVIndustry
         public readonly CargoType[] Cargos;
         public float AverageValue { get; private set; }
 
-        private HashSet<TrainCarType> compatibleCars = null;
+        public HashSet<TrainCarType> CompatibleCars { get; private set; }
 
         private void Init()
         {
             var containers = Cargos.SelectMany(carg => CargoTypes.GetCarContainerTypesThatSupportCargoType(carg)).Distinct();
-            compatibleCars = containers.SelectMany(cont => CargoTypes.GetTrainCarTypesThatAreSpecificContainerType(cont)).ToHashSet();
+            CompatibleCars = containers.SelectMany(cont => CargoTypes.GetTrainCarTypesThatAreSpecificContainerType(cont)).ToHashSet();
 
             AverageValue = Cargos.Sum(cargo => ResourceTypes.GetFullDamagePriceForCargo(cargo)) / Cargos.Length;
         }
@@ -117,7 +117,7 @@ namespace DVIndustry
 
         public bool CanBeHeldBy( TrainCarType carType )
         {
-            return compatibleCars.Contains(carType);
+            return CompatibleCars.Contains(carType);
         }
 
         public CargoType GetCargoForCar( TrainCarType carType )

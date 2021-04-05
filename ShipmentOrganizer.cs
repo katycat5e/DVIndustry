@@ -55,12 +55,12 @@ namespace DVIndustry
             var pair = new IndustryYardPair(industry, yard);
 
             // add ref to this station under each resource it accepts
-            foreach( string resource in industry.InputResources )
+            foreach( var resource in industry.InputResources )
             {
-                if( !acceptingIndustries.TryGetValue(resource, out List<IndustryYardPair> destList) )
+                if( !acceptingIndustries.TryGetValue(resource.ID, out List<IndustryYardPair> destList) )
                 {
                     destList = new List<IndustryYardPair>();
-                    acceptingIndustries[resource] = destList;
+                    acceptingIndustries[resource.ID] = destList;
                 }
 
                 destList.Add(pair);

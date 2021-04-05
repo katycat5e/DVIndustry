@@ -28,8 +28,8 @@ namespace DVIndustry
 
         protected Dictionary<string, float> resourceRates = new Dictionary<string, float>();
 
-        public IEnumerable<string> InputResources => inputStockpile.Select(r => r.Key);
-        public IEnumerable<string> OutputResources => outputStockpile.Select(r => r.Key);
+        public IEnumerable<ResourceClass> InputResources => inputStockpile.Select(r => r.AcceptedItems);
+        public IEnumerable<ResourceClass> OutputResources => outputStockpile.Select(r => r.AcceptedItems);
         public IEnumerable<string> AllResources => stockpileMap.Keys;
 
         protected bool waitingForLoadComplete = true;

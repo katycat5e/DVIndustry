@@ -35,7 +35,7 @@ namespace DVIndustry
 
         private IndustryController AttachedIndustry = null;
 
-        private readonly FancyLinkedList<YardControlConsist> consists = null;
+        private FancyLinkedList<YardControlConsist> consists = null;
         private IEnumerable<YardControlConsist> LoadingConsists =>
             (consists != null) ? consists.Where(c => c.State == YardConsistState.Loading) : Enumerable.Empty<YardControlConsist>();
         private IEnumerable<YardControlConsist> UnloadingConsists =>
@@ -49,6 +49,7 @@ namespace DVIndustry
         private YardTrackInfo[] loadingTracks;
         private Track[] stagingTracks;
         private static readonly Dictionary<Track, YardTrackInfo> loadTrackMap = new Dictionary<Track, YardTrackInfo>();
+        private List<Track> AllTracks => stagingTracks.Union(loadingTracks.Select(lt => lt.Track)).ToList();
         public static bool IsOnLoadingTrack( YardControlConsist consist ) => consist.Track != null && loadTrackMap.ContainsKey(consist.Track);
 
 
@@ -260,6 +261,7 @@ namespace DVIndustry
 #if DEBUG
                 DVIndustry.ModEntry.Logger.Log($"{StationId} - no consists found! generating new consists...");
 #endif
+                consists = new FancyLinkedList<YardControlConsist>();
                 generationCoro = StartCoroutine(GenerateConsistsCoro());
             }
         }
@@ -315,8 +317,64 @@ namespace DVIndustry
 
         private IEnumerator GenerateConsistsCoro()
         {
-            throw new NotImplementedException();
-            // yield return null;
+            var industry = IndustryController.At(StationId);
+            var resources = industry.OutputResources.ToList();
+            yield return null; // next frame
+
+            // Give licensed cargos priority
+            resources.Sort((x, y) =>
+            {
+                int result = 0;
+                if( LicenseManager.GetMissingLicensesForJob(LicenseManager.GetRequiredLicensesForCargoTypes(x.Cargos.ToList())) == 0 )
+                {
+                    result -= 1;
+                }
+                if( LicenseManager.GetMissingLicensesForJob(LicenseManager.GetRequiredLicensesForCargoTypes(y.Cargos.ToList())) == 0 )
+                {
+                    result += 1;
+                }
+                return result;
+            });
+            yield return null; // next frame
+
+            foreach( var resource in resources )
+            {
+                int carCount = rand.Next(LicenseManager.STARTING_TRAIN_LENGTH_MIN, LicenseManager.STARTING_TRAIN_LENGTH_MAX);
+                List<TrainCarType> carTypesToSpawn = new List<TrainCarType>(carCount)
+                    .Select(tct => resource.CompatibleCars.ElementAt(rand.Next(0, resource.CompatibleCars.Count)))
+                    .ToList();
+                yield return null; // next frame
+
+                var yto = YardTracksOrganizer.Instance;
+                float consistLength = yto.GetTotalCarTypesLength(carTypesToSpawn);
+                var possibleTracks = yto.FilterOutTracksWithoutRequiredFreeSpace(AllTracks, consistLength + yto.GetSeparationLengthBetweenCars(carCount));
+                var trackToSpawnOn = possibleTracks.ElementAt(rand.Next(0, possibleTracks.Count));
+                var railTrackToSpawnOn = CarsSaveManager.Instance.OrderedRailtracks.First(rt => rt.logicTrack == trackToSpawnOn);
+                yield return null; // next frame
+
+                var trainCars = CarSpawner.SpawnCarTypesOnTrack(carTypesToSpawn, railTrackToSpawnOn, true);
+                yield return null; // next frame
+
+                foreach( var tc in trainCars )
+                {
+                    tc.logicCar.LoadCargo(tc.logicCar.capacity, resource.Cargos.ElementAt(rand.Next(0, resource.Cargos.Length)));
+                }
+                yield return null; // next frame
+
+                var requests = ShipmentOrganizer.GetRequests(resource);
+                if( requests.Count() == 0 )
+                {
+                    throw new Exception($"{StationId} - found no requests for ResourceClass {resource.ID}");
+                }
+                var consist = new YardControlConsist(trainCars, YardConsistState.Loaded, resource, requests.ElementAt(0).DestYard);
+                AddConsist(consist);
+                yield return null; // next frame
+
+                TryCreateJobLoadedConsist(consist);
+                yield return null; // next frame
+            }
+
+            yield break;
         }
 
         private Job TryCreateJobLoadedConsist( YardControlConsist consist )

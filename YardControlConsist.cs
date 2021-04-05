@@ -52,10 +52,12 @@ namespace DVIndustry
         public IEnumerable<TrainCar> TrainCars => Cars;
         public IEnumerable<Car> LogicCars => Cars.Select(tc => tc.logicCar);
 
-        public YardControlConsist( IEnumerable<TrainCar> cars, YardConsistState state )
+        public YardControlConsist( IEnumerable<TrainCar> cars, YardConsistState state, ResourceClass resource = null, string destination = null )
         {
             Cars = cars.ToList();
             State = state;
+            CargoClass = resource;
+            Destination = destination;
         }
 
         public void Instantiate()
