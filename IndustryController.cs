@@ -28,8 +28,8 @@ namespace DVIndustry
 
         protected Dictionary<string, float> resourceRates = new Dictionary<string, float>();
 
-        public IEnumerable<ResourceClass> InputResources => inputStockpile.Select(r => r.AcceptedItems);
-        public IEnumerable<ResourceClass> OutputResources => outputStockpile.Select(r => r.AcceptedItems);
+        public IEnumerable<string> InputResources => inputStockpile.Select(r => r.Key);
+        public IEnumerable<string> OutputResources => outputStockpile.Select(r => r.Key);
         public IEnumerable<string> AllResources => stockpileMap.Keys;
 
         protected bool waitingForLoadComplete = true;
@@ -46,8 +46,8 @@ namespace DVIndustry
             }
 
             // Create stockpiles for each process I/O resource
-            inputStockpile = processes.SelectMany(proc => proc.Inputs.Select(r => r.CloneEmpty())).ToArray();
-            outputStockpile = processes.SelectMany(proc => proc.Outputs.Select(r => r.CloneEmpty())).ToArray();
+            inputStockpile = new HashSet<IndustryResource>(processes.SelectMany(proc => proc.Inputs)).ToArray();
+            outputStockpile = new HashSet<IndustryResource>(processes.SelectMany(proc => proc.Outputs)).ToArray();
 
             // Add references for all stockpiles to the map
             stockpileMap = inputStockpile.Union(outputStockpile).ToDictionary(res => res.Key, res => res);
@@ -91,11 +91,11 @@ namespace DVIndustry
             return true;
         }
 
-        private IndustryResource FindOutputStock( CargoType cargoType )
+        private IndustryResource FindOutputStock( ResourceClass cargo )
         {
             foreach( IndustryResource stock in outputStockpile )
             {
-                if( stock.AcceptedItems.ContainsCargo(cargoType) )
+                if( stock.Key == cargo.ID )
                 {
                     return stock;
                 }
@@ -103,35 +103,18 @@ namespace DVIndustry
             return null;
         }
 
-        public ResourceClass TakeOutputCargo( CargoType cargoType, float amount )
-        {
-            var stock = FindOutputStock( cargoType );
-            if( stock != null )
-            {
-                if( stock.Amount >= amount )
-                {
-                    stock.Amount -= amount;
-                    return stock.AcceptedItems;
-                }
-                DVIndustry.ModEntry.Logger.Warning($"Tried to take an output ({amount} of {cargoType}), but this industry doesn't have enough ({stock.Amount})");
-            }
-
-            DVIndustry.ModEntry.Logger.Warning($"Tried to take an output ({cargoType}) that this industry doesn't provide");
-            return null;
-        }
-
-        public ResourceClass StoreInputCargo( CargoType cargoType, float amount )
+        public ResourceClass StoreInputCargo( ResourceClass cargo, float amount )
         {
             foreach( IndustryResource stock in inputStockpile )
             {
-                if( stock.AcceptedItems.ContainsCargo(cargoType) )
+                if( stock.Key == cargo.ID )
                 {
                     stock.Amount += amount;
                     return stock.AcceptedItems;
                 }
             }
 
-            DVIndustry.ModEntry.Logger.Warning($"Tried to store an input ({cargoType}) that this industry doesn't accept");
+            DVIndustry.ModEntry.Logger.Warning($"Tried to store an input ({cargo.ID}) that this industry doesn't accept");
             return null;
         }
 
@@ -163,6 +146,23 @@ namespace DVIndustry
             }
 
             DVIndustry.ModEntry.Logger.Warning($"Tried to store a resource ({resource.AcceptedItems.ID}) that this industry doesn't use");
+        }
+
+        public ResourceClass TakeOutputCargo( ResourceClass cargo, float amount )
+        {
+            var stock = FindOutputStock(cargo);
+            if (stock != null)
+            {
+                if (stock.Amount >= amount)
+                {
+                    stock.Amount -= amount;
+                    return stock.AcceptedItems;
+                }
+                DVIndustry.ModEntry.Logger.Warning($"Tried to take an output ({amount} of {cargo.ID}), but this industry doesn't have enough ({stock.Amount})");
+            }
+
+            DVIndustry.ModEntry.Logger.Warning($"Tried to take an output ({cargo.ID}) that this industry doesn't provide");
+            return null;
         }
 
         public float GetDemand( ResourceClass resource, int minutes = 40 )
@@ -258,9 +258,9 @@ namespace DVIndustry
         {
             if( industryData.StockPiles == null ) yield break;
 
-            foreach( var kvp in industryData.StockPiles )
+            foreach( var (key, amount) in industryData.StockPiles )
             {
-                if( IndustryResource.TryParse(kvp.Key, kvp.Value, out IndustryResource nextRes) )
+                if( IndustryResource.TryParse(industryData.StationId, key, amount, out IndustryResource nextRes) )
                 {
                     // successfully parsed
                     yield return nextRes;

@@ -59,9 +59,25 @@ namespace DVIndustry
             foreach( JSONIndustryConfig jsonIndustry in config.Industries )
             {
                 var processList = new IndustryProcess[jsonIndustry.Processes.Length];
-                for( int i = 0; i < jsonIndustry.Processes.Length; i++ )
+                for( int i = 0; i < jsonIndustry.Inputs.Length; i++ )
                 {
-                    if( TryConvertProcess(jsonIndustry.Processes[i], out IndustryProcess process) )
+                    if( !TryConvertStockpile(jsonIndustry.StationId, jsonIndustry.Inputs[i], out IndustryResource resource) )
+                    {
+                        DVIndustry.ModEntry.Logger.Critical($"Error loading input stockpile for industry at {jsonIndustry.StationId}");
+                        return false;
+                    }
+                }
+                for (int i = 0; i < jsonIndustry.Outputs.Length; i++)
+                {
+                    if (!TryConvertStockpile(jsonIndustry.StationId, jsonIndustry.Outputs[i], out IndustryResource resource))
+                    {
+                        DVIndustry.ModEntry.Logger.Critical($"Error loading output stockpile for industry at {jsonIndustry.StationId}");
+                        return false;
+                    }
+                }
+                for ( int i = 0; i < jsonIndustry.Processes.Length; i++ )
+                {
+                    if( TryConvertProcess(jsonIndustry.StationId, jsonIndustry.Processes[i], out IndustryProcess process) )
                     {
                         processList[i] = process;
                     }
@@ -151,15 +167,21 @@ namespace DVIndustry
             return true;
         }
 
-        private static bool TryConvertProcess( JSONIndustryProcess jsonProcess, out IndustryProcess process )
+        private static bool TryConvertStockpile( string stationId, JSONResourceStockpile jsonStockpile, out IndustryResource resource )
+        {
+            return IndustryResource.TryParse(stationId, jsonStockpile.ID, jsonStockpile.amount, out resource);
+        }
+
+        private static bool TryConvertProcess( string stationId, JSONIndustryProcess jsonProcess, out IndustryProcess process )
         {
             process = new IndustryProcess() { ProcessingTime = jsonProcess.Time };
 
-            process.Inputs = new IndustryResource[jsonProcess.Inputs.Count];
+            process.Inputs = new IndustryResource[jsonProcess.Inputs.Length];
             int i = 0;
-            foreach( var kvp in jsonProcess.Inputs )
+            foreach( var key in jsonProcess.Inputs )
             {
-                if( IndustryResource.TryParse(kvp.Key, kvp.Value, out IndustryResource resource) )
+                // using 0 for amount b/c amount was already processed in TryConvertStockpile (this is just a lookup)
+                if( IndustryResource.TryParse(stationId, key, 0, out IndustryResource resource) )
                 {
                     process.Inputs[i] = resource;
                 }
@@ -172,11 +194,12 @@ namespace DVIndustry
                 i++;
             }
 
-            process.Outputs = new IndustryResource[jsonProcess.Outputs.Count];
+            process.Outputs = new IndustryResource[jsonProcess.Outputs.Length];
             i = 0;
-            foreach( var kvp in jsonProcess.Outputs )
+            foreach( var key in jsonProcess.Outputs )
             {
-                if( IndustryResource.TryParse(kvp.Key, kvp.Value, out IndustryResource resource) )
+                // using 0 for amount b/c amount was already processed in TryConvertStockpile (this is just a lookup)
+                if ( IndustryResource.TryParse(stationId, key, 0, out IndustryResource resource) )
                 {
                     process.Outputs[i] = resource;
                 }
@@ -211,15 +234,23 @@ namespace DVIndustry
         public class JSONIndustryConfig
         {
             public string StationId;
+            public JSONResourceStockpile[] Inputs;
+            public JSONResourceStockpile[] Outputs;
             public JSONIndustryProcess[] Processes;
+        }
+
+        public class JSONResourceStockpile
+        {
+            public string ID;
+            public float amount;
         }
 
         public class JSONIndustryProcess
         {
             public float Time;
 
-            public Dictionary<string, float> Inputs;
-            public Dictionary<string, float> Outputs;
+            public string[] Inputs;
+            public string[] Outputs;
         }
 
         public class JSONYardConfig

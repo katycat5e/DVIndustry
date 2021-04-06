@@ -193,7 +193,7 @@ namespace DVIndustry
                         var (cargoLoaded, amountLoaded) = consist.LoadNextCar();
                         if( amountLoaded > 0 )
                         {
-                            var resource = AttachedIndustry.TakeOutputCargo(cargoLoaded, amountLoaded);
+                            var resource = AttachedIndustry.TakeOutputCargo(consist.CargoClass, amountLoaded);
                             if( resource != null )
                             {
                                 ShipmentOrganizer.OnCarLoaded(StationId, consist.Destination, resource, amountLoaded);
@@ -212,7 +212,7 @@ namespace DVIndustry
                         var (cargoUnloaded, amountUnloaded) = consist.UnloadNextCar();
                         if( amountUnloaded > 0 )
                         {
-                            var resource = AttachedIndustry.StoreInputCargo(cargoUnloaded, amountUnloaded);
+                            var resource = AttachedIndustry.StoreInputCargo(consist.CargoClass, amountUnloaded);
                             if( resource != null )
                             {
                                 ShipmentOrganizer.OnCarUnloaded(consist.Destination, resource, amountUnloaded);
@@ -318,7 +318,7 @@ namespace DVIndustry
         private IEnumerator GenerateConsistsCoro()
         {
             var industry = IndustryController.At(StationId);
-            var resources = industry.OutputResources.ToList();
+            var resources = industry.OutputResources.Select(id => ResourceClass.Parse(id)).Where(r => r != null).ToList();
             yield return null; // next frame
 
             // Give licensed cargos priority

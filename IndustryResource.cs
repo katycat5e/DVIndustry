@@ -1,4 +1,6 @@
 ﻿using DV.Logic.Job;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace DVIndustry
 {
@@ -8,6 +10,9 @@ namespace DVIndustry
         public float Amount;
 
         public string Key => AcceptedItems?.ID;
+
+        private static readonly Dictionary<string, Dictionary<string, IndustryResource>> knownIndustryResources
+            = new Dictionary<string, Dictionary<string, IndustryResource>>();
 
         public IndustryResource( ResourceClass accepted, float amount )
         {
@@ -19,17 +24,19 @@ namespace DVIndustry
             : this(ResourceClass.SingleCargoClass(singleType), amount)
         { }
 
-        public IndustryResource CloneEmpty()
-        {
-            return new IndustryResource(AcceptedItems, 0);
-        }
 
-
-        public static bool TryParse( string key, float amount, out IndustryResource resource )
+        public static bool TryParse( string stationId, string key, float amount, out IndustryResource resource )
         {
+            if( knownIndustryResources.ContainsKey(stationId) && knownIndustryResources[stationId].ContainsKey(key) )
+            {
+                resource = knownIndustryResources[stationId][key];
+                resource.Amount += amount;
+                return true;
+            }
+
             if( ResourceClass.TryParse(key, out ResourceClass rClass) )
             {
-                resource = new IndustryResource(rClass, amount);
+                resource = knownIndustryResources[stationId][key] = new IndustryResource(rClass, amount);
                 return true;
             }
 
